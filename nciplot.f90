@@ -55,7 +55,7 @@ program nciplot
    ! the molecular info
    type(molecule), allocatable :: m(:)
    ! logical units
-   integer :: lugc, ludc, luvmd, ludat
+   integer :: lugc, ludc, luvmd, ludat, ludc1, ludc2
    ! cubes
    real*8, allocatable, dimension(:, :, :) :: crho, cgrad
    ! ligand, intermolecular keyword
@@ -136,7 +136,6 @@ program nciplot
       endif
    endif
 
-   !open(unit=99, file='debug.log', status='unknown')
    !===============================================================================!
    ! Internal clock starts! Header drops.
    !===============================================================================!
@@ -330,12 +329,9 @@ do while (.true.)
       case ("CLUSTERING")  ! integration
          doclustering = .true.              ! python script cluster
          write (uout, 138) 
-      !case default ! something else is read
-      !   call error('nciplot', 'Don''t know what to do with '//trim(word)//' keyword', faterr)
+
       end select
-
    enddo
-
    
 11   continue 
    rewind(uin)
@@ -574,6 +570,8 @@ end do
    ! Information for user and output files. Default logical units first.
    !===============================================================================!
    lugc = -1 ! RDG logical unit
+   ludc1 = -1 ! Density logical unit
+   ludc2 = -1 ! Density logical unit
    ludc = -1 ! Density logical unit
    luvmd = -1 ! VMD logical unit
    write (uout, 131)
@@ -594,11 +592,15 @@ end do
 !  write(uout,121) xinit, xmax, xinc, nstep ! this is currently not used because it will be adapted
    if (noutput >= 2) then    ! number of outputs --> 2: Only .CUBE files
       lugc = 9
+      ludc1 = 12
+      ludc2 = 13
       ludc = 10
       luvmd = 11
       open (lugc, file=trim(oname)//"-grad.cube")    ! RDG cube file
       open (ludc, file=trim(oname)//"-dens.cube")    ! Density cube file
       open (luvmd, file=trim(oname)//".vmd")         ! VMD script
+      open (ludc1, file=trim(oname)//"-grad1.cube")   ! Density cube file for monomer1
+      open (ludc2, file=trim(oname)//"-grad2.cube")   ! Density cube file for monomer2 - conditional for clustering only
    endif
 
    if (noutput == 1 .or. noutput == 3) then
@@ -623,6 +625,8 @@ end do
    end if
    if (lugc > 0) call write_cube_header(lugc, 'grad_cube', '3d plot, reduced density gradient')
    if (ludc > 0) call write_cube_header(ludc, 'dens_cube', '3d plot, density')
+   if (ludc1 > 0) call write_cube_header(ludc1, 'dens_cube', '3d plot, density monomer 1')
+   if (ludc2 > 0) call write_cube_header(ludc2, 'dens_cube', '3d plot, density monomer 2')
 
    !===============================================================================!
    ! Start run, using multi-level grids.
@@ -999,8 +1003,8 @@ end if ! isnotcube
    !===============================================================================!
    ! Write cube files.
    !===============================================================================!
-   if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
-   if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
+   ! if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
+   ! if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
   
    call system_clock(count=c4)
    write (*, "(A, F6.2, A)") ' Time for writing outputs = ', real(dble(c4 - c3)/dble(cr), kind=8), ' secs'
@@ -1112,7 +1116,6 @@ end if ! isnotcube
       allocate (tmp_rmbox_range_tmp(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
       if (istat /= 0) call error('nciplot', 'could not allocate memory for tmp_rmbox_range_tmp', faterr) 
   
-  
       allocate (tmp_rmbox_range(0:nstep(1) - 2, 0:nstep(2) - 2, 0:nstep(3) - 2,1:nranges), stat=istat)
       if (istat /= 0) call error('nciplot', 'could not allocate memory for tmp_rmbox_range', faterr)
   
@@ -1129,7 +1132,6 @@ end if ! isnotcube
       tmp_rmbox_range_tmp = .true. 
       box_in_range = .true.
   
-   
       do i = 1, nranges
          if (srhorange(i, 1) .lt. srhorange(i, 2)) then
             upperbound = srhorange(i, 2)
@@ -1142,7 +1144,6 @@ end if ! isnotcube
             call DoRangeWarning2() ! warning: range outside rhocut
          endif
          
-    
          do k = 0, nstep(3) - 2
             do j = 0, nstep(2) - 2
                do l = 0, nstep(1) - 2
@@ -1152,10 +1153,7 @@ end if ! isnotcube
                              do ll=l,l+1
                                 if (((crho(ll, jj, kk)/100d0) .gt. lowerbound) .and. &  
                                          ((crho(ll, jj, kk)/100d0) .lt. upperbound) .and. (cgrad(ll,jj,kk).gt.0)) then 
-                                     
                                     box_in_range(ll,jj,kk,i)=.false.    
-                                
-                              
                                endif            
                              enddo
                           enddo
@@ -1166,7 +1164,6 @@ end if ! isnotcube
           enddo
         enddo
       
-    
       ! Integration 
       do i= 1, nranges
          tmp_rmbox_range_tmp(:,:,:)= box_in_range(:,:,:,i)
@@ -1184,10 +1181,37 @@ end if ! isnotcube
    call system_clock(count=c6)
 
    !===============================================================================!
+   ! Alternative write .dat and cube files printing only integrated region.
+   !===============================================================================!
+   if (.true.) then
+      do k = 0, nstep(3) - 1
+         do j = 0, nstep(2) - 1
+            do i = 0, nstep(1) - 1
+               ! fragments for the wfn case
+               intra = (cgrad(i, j, k) < 0d0)
+               cgrad(i, j, k) = abs(cgrad(i, j, k))
+               dimgrad = cgrad(i, j, k)
+               rho = crho(i, j, k)/100d0
+               ! write the dat file
+               if (ludat > 0 .and. .not. intra .and. (abs(rho) < rhocut) .and. (dimgrad < dimcut) .and. &
+                   (abs(rho) > 1d-30) .and. .not. (rmbox_coarse(i, j, k) )) then
+                  write (ludat, '(1p,E18.10,E18.10)') rho, dimgrad
+               endif ! rhocut/dimcut
+            end do
+         end do
+      end do
+      if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
+      if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
+      if (ludc1 > 0) call write_cube_body(ludc1, nstep, crho_n(:, :, :, 1))         ! density monomer1
+      if (ludc2 > 0) call write_cube_body(ludc2, nstep, crho_n(:, :, :, 2))         ! density monomer2
+      call system_clock(count=c4)
+      write (*, "(A, F6.2, A)") ' Time for writing outputs = ', real(dble(c4 - c3)/dble(cr), kind=8), ' secs'
+   end if
+
+   !===============================================================================!
    ! Deallocate grids.
    !===============================================================================!
    if (allocated(tmp_rmbox)) deallocate (tmp_rmbox)
-   if (allocated(srhorange)) deallocate (srhorange)
    if (allocated(rmbox_coarse)) deallocate (rmbox_coarse) 
    if (allocated(tmp_rmbox_range)) deallocate (tmp_rmbox_range)
    if (allocated(tmp_rmbox_range_tmp)) deallocate (tmp_rmbox_range_tmp)
@@ -1224,8 +1248,7 @@ end if ! isnotcube
    end if
 
    !===============================================================================!
-   ! captar error de no librerias para mencionar por terminal, no matar en caso
-   ! NCICLUSTER python script integration
+   ! NCICLUSTER python script integration. Author: Katarzyna Zator
    !===============================================================================!
    if(doclustering) then 
        iounit_p1 = 501
@@ -1235,9 +1258,15 @@ end if ! isnotcube
        ! Close the file
        close(iounit_p1)
 
-      write(command_ncicluster, '(A,A,A)') trim(adjustl(nciplot_home)), "/scripts/ncicluster.py", & 
-         " tmp_ncicluster_file"
-      
+      write(command_ncicluster, '(A,A,A,A,F5.2,A,F5.3,A,F5.3)') trim(adjustl(nciplot_home)), "/scripts/NCICLUSTER.py", & 
+         " tmp_ncicluster_file", & 
+         " --isovalue ", & 
+         dimcut, &
+         " --outer ", & 
+         srhorange(3, 2), &          
+         " --inner ", & 
+         srhorange(3, 1)    
+
       py_status = system(trim(adjustl(command_ncicluster)))
       ! Check the return py_status
       select case (py_status)
@@ -1263,6 +1292,7 @@ end if ! isnotcube
    if (allocated(xinitat)) deallocate (xinitat)
    if (allocated(nstepat)) deallocate (nstepat)
    if (allocated(m)) deallocate (m)
+   if (allocated(srhorange)) deallocate (srhorange)
    if (allocated(tmp_crho)) deallocate (tmp_crho)
    if (allocated(tmp_crho_n)) deallocate (tmp_crho_n)
    if (allocated(tmp_cheigs)) deallocate (tmp_cheigs)
@@ -1282,8 +1312,8 @@ end if ! isnotcube
 114 format('#!/usr/local/bin/vmd', /, &
           '# VMD script written by save_state $Revision: 1.10 $', /, &
           '# VMD version: 1.8.6            ', /, &
-          'set viewplist            ', /, &
-          'set fixedlist            ', /, &
+          'set viewplist {}         ', /, &
+          'set fixedlist {}         ', /, &
           '# Display settings            ', /, &
           'display projection   Orthographic            ', /, &
           'display nearclip set 0.000000            ', /, &
@@ -1476,9 +1506,7 @@ end if ! isnotcube
 
 138 format('                                                     ', / &
           '-------------------------------------------------------------------', /, &
-          ' CLUSTERING option specified                     ', /, &
-          ' NciCluster will be used if all libraries are installed               ', /, &
-          ' !!! Remember to set NCIPLOT_HOME variable                     ', /, &
+          ' CLUSTERING option specified - NCICLUSTER will be used             ', /, &
           '-------------------------------------------------------------------', /, &
           '                         ',/) 
 contains
