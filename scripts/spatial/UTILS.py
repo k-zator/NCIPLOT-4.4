@@ -1,5 +1,6 @@
-
 import numpy as np
+from multiprocessing import Pool
+import mmap
 
 def process_cube(filename):
     """Read and format cubes"""
@@ -98,43 +99,56 @@ def read_cube(filename, verbose=False):
 
     return header, pts, carray, atcoords
 
-def write_cube(filename, cl, X, labels, header, grid, verbose=False):
-    """ Write cube file for each cluster.
-    Parameters
-    ----------
-    filename : str
-         Common string in cube files name.
-    X : np.array
-         Array with columns corresponding to space coordinates, sign(l2)*dens and rdg; for all data.
-    labels : np.array
-         One dimensional array with integers that label the data in X_iso into different clusters.
-    header : list of str
-         Original cube file header.
-    """
-    grad = np.array([g if labels[ig] == cl else 101 for ig, g in enumerate(X[:,4])])
-    dens = np.array([g if labels[ig] == cl else 101 for ig, g in enumerate(X[:,3])])
+def write_cube(filename, cl, X, labels, header, grid, verbose=False, parallel=True):
+    """Write cube files with highly optimized performance."""
+    import numpy as np
+    from multiprocessing import Pool
+    import os
+
+    # Pre-calculate array dimensions 
+    header_str = ''.join(header)
+    
+    # Vectorized data preparation
+    mask = (labels == cl)[:, np.newaxis]
+    values = np.where(mask, X[:, [4, 3]], 101)
+    values = values.reshape(-1, 2, grid[2])
+
+    def format_data(data):
+        """Format data into rows of 6 values with scientific notation"""
+        formatted_lines = []
+        line = []
+        for val in data:
+            line.append(f"{val:13.5E}")
+            if len(line) == 6:
+                formatted_lines.append(" ".join(line))
+                line = []
+        if line:  # Handle any remaining values
+            formatted_lines.append(" ".join(line))
+        return "\n".join(formatted_lines) + "\n"
+
+    def write_file(suffix, data):
+        """Write a single cube file"""
+        output_file = f"{filename}-cl{cl}-{suffix}.cube"
+        
+        with open(output_file, 'w') as f:
+            # Write header
+            f.write(header_str)
+            
+            # Write data in chunks
+            chunk_size = 6000  # Process 1000 lines at a time
+            for i in range(0, len(data), chunk_size):
+                chunk = data[i:i + chunk_size]
+                formatted = format_data(chunk)
+                f.write(formatted)
+
+    if parallel and len(values) > 1000000:  # Only use multiprocessing for large datasets
+        with Pool() as pool:
+            pool.starmap(write_file, 
+                        [('grad', values[:, 0].flatten()), 
+                         ('dens', values[:, 1].flatten())])
+    else:
+        write_file('grad', values[:, 0].flatten())
+        write_file('dens', values[:, 1].flatten())
 
     if verbose:
-        print("  Writing cube file {}...      ".format(filename + "-cl" + str(cl) + "-grad.cube"),
-            end="", flush=True)
-    with open(f"{filename}" + "-cl" + str(cl) + "-grad.cube", "w") as f_out:
-        for line in header:
-            f_out.write(line)
-
-        grad_values = grad.reshape(-1, grid[2])  # Reshape to extract C dimension
-        for row in grad_values: # Print in rows of up to 6 values 
-            for i in range(0, len(row), 6):
-                f_out.write("".join("{:13.5E}".format(item) for item in row[i:i+6]))
-                f_out.write("\n")
-    if verbose:
-        print("  Writing cube file {}...      ".format(filename + "-cl" + str(cl) + "-dens.cube"),
-            end="", flush=True)
-    with open(f"{filename}" + "-cl" + str(cl) + "-dens.cube", "w") as f_out:
-        for line in header:
-            f_out.write(line)
-        dens_values = dens.reshape(-1, grid[2])  # Reshape to extract C dimension
-        for row in dens_values:
-            for i in range(0, len(row), 6):
-                f_out.write("".join("{:13.5E}".format(item) for item in row[i:i+6]))
-                f_out.write("\n")
-    return
+        print(f"  Wrote cube files {filename}-cl{cl}-[grad/dens].cube")

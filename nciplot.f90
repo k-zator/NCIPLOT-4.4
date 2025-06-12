@@ -599,8 +599,8 @@ end do
       open (lugc, file=trim(oname)//"-grad.cube")    ! RDG cube file
       open (ludc, file=trim(oname)//"-dens.cube")    ! Density cube file
       open (luvmd, file=trim(oname)//".vmd")         ! VMD script
-      open (ludc1, file=trim(oname)//"-grad1.cube")   ! Density cube file for monomer1
-      open (ludc2, file=trim(oname)//"-grad2.cube")   ! Density cube file for monomer2 - conditional for clustering only
+      ! open (ludc1, file=trim(oname)//"-grad1.cube")   ! Density cube file for monomer1
+      ! open (ludc2, file=trim(oname)//"-grad2.cube")   ! Density cube file for monomer2 - conditional for clustering only
    endif
 
    if (noutput == 1 .or. noutput == 3) then
@@ -625,8 +625,8 @@ end do
    end if
    if (lugc > 0) call write_cube_header(lugc, 'grad_cube', '3d plot, reduced density gradient')
    if (ludc > 0) call write_cube_header(ludc, 'dens_cube', '3d plot, density')
-   if (ludc1 > 0) call write_cube_header(ludc1, 'dens_cube', '3d plot, density monomer 1')
-   if (ludc2 > 0) call write_cube_header(ludc2, 'dens_cube', '3d plot, density monomer 2')
+   ! if (ludc1 > 0) call write_cube_header(ludc1, 'dens_cube', '3d plot, density monomer 1')
+   ! if (ludc2 > 0) call write_cube_header(ludc2, 'dens_cube', '3d plot, density monomer 2')
 
    !===============================================================================!
    ! Start run, using multi-level grids.
@@ -1202,8 +1202,8 @@ end if ! isnotcube
       end do
       if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
       if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
-      if (ludc1 > 0) call write_cube_body(ludc1, nstep, crho_n(:, :, :, 1))         ! density monomer1
-      if (ludc2 > 0) call write_cube_body(ludc2, nstep, crho_n(:, :, :, 2))         ! density monomer2
+      ! if (ludc1 > 0) call write_cube_body(ludc1, nstep, crho_n(:, :, :, 1))         ! density monomer1
+      ! if (ludc2 > 0) call write_cube_body(ludc2, nstep, crho_n(:, :, :, 2))         ! density monomer2
       call system_clock(count=c4)
       write (*, "(A, F6.2, A)") ' Time for writing outputs = ', real(dble(c4 - c3)/dble(cr), kind=8), ' secs'
    end if

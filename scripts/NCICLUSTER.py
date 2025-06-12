@@ -51,13 +51,6 @@ filename = files[0] # unless there are indeed multiple - but how?
 # Mrhos, densarray, header, grid, densarray1, densarray2 = process_cube(filename)
 Mrhos, densarray, header, grid = process_cube(filename)
 CPs_both = find_CP_with_gradient(Mrhos, threshold, radius)
-#Mrhos1 = Mrhos.copy()
-#Mrhos1[:, 3] = densarray1.reshape(densarray1.size,)
-#CPs_1 = find_CP_with_gradient(Mrhos1, threshold, radius)
-#Mrhos2 = Mrhos.copy()
-#Mrhos2[:, 3] = densarray2.reshape(densarray2.size,)
-#CPs_2 = find_CP_with_gradient(Mrhos2, threshold, radius)
-#CPs = get_unique_dimeric_CPs(CPs_both, CPs_1, CPs_2)
 nn = NearestNeighbors(n_neighbors=1, metric='euclidean')
 nn.fit([i[0] for i in CPs_both])
 # Find the nearest cluster center for each point in XYZ
@@ -102,6 +95,3 @@ for i in np.unique(labels):
     print (" n=5/3           : {:.8f}".format(integrals[-1][2][6]))
     print (" Volume          : {:.8f}".format(integrals[-1][2][7]))
     print(" # -----------------------------------------------------")
-
-print(" # -----------------------------------------------------")
-print(" End -- {} \n".format(time.ctime()))

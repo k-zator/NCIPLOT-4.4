@@ -9,22 +9,42 @@ def group_grad_to_grid(coordinates, gradient, a, gradient_threshold):
     coordinates : 3N array of (x, y, z) coordinates.
     gradient : 1N array of gradient values associated with each point.
     a : Grid spacing.
-    Returns Grid dictionary with density per cell.
+    Returns indices of possible minima points.
     """
-    grid = defaultdict(list)
-    # Assign points to grid cells
-    for i in range(len(coordinates)):
-        cell_index = tuple((coordinates[i] // a).astype(int))
-        grid[cell_index].append([i, gradient[i]]) #so that each grid cell has the necessary grad information
-
-    # Compute minimum density per cell and use it to select which ones are worth pursuing further
-    # i.e. the minimum density in the cell is below the threshold
+    # Vectorized grid cell assignment
+    cell_indices = (coordinates // a).astype(int)
+    unique_cells, inverse_indices = np.unique(cell_indices, axis=0, return_inverse=True)
+    
+    # Pre-filter gradients to avoid processing unnecessary points
+    mask = gradient < gradient_threshold
+    
+    # Find minimum gradient per cell using reduceat
+    sorted_indices = np.argsort(inverse_indices)
+    sorted_gradients = gradient[sorted_indices]
+    sorted_mask = mask[sorted_indices]
+    
+    # Get cell boundaries
+    cell_boundaries = np.bincount(inverse_indices)
+    cell_boundaries = np.cumsum(cell_boundaries[:-1])
+    
+    # Find minimum gradients per cell
+    min_gradients = np.minimum.reduceat(sorted_gradients, np.r_[0, cell_boundaries])
+    
+    # Split sorted mask into cell groups and check if any point in each cell satisfies the mask
+    cell_masks = np.split(sorted_mask, cell_boundaries)
+    mask_any = np.array([np.any(m) for m in cell_masks])
+    
+    # Select cells with gradients below threshold
+    valid_cells = (min_gradients < gradient_threshold) & mask_any
+    
+    # Get indices of points with minimum gradient in valid cells
     possible_minima = []
-    for _, values in grid.items():
-        min_gradient = min(values, key=lambda x: x[1])
-        if min_gradient[1] < 100:
-            if min_gradient[1] < gradient_threshold:
-                possible_minima.append(min_gradient[0])
+    for cell_idx in np.where(valid_cells)[0]:
+        start = 0 if cell_idx == 0 else cell_boundaries[cell_idx - 1]
+        end = cell_boundaries[cell_idx] if cell_idx < len(cell_boundaries) else len(sorted_gradients)
+        cell_min_idx = start + np.argmin(sorted_gradients[start:end])
+        possible_minima.append(sorted_indices[cell_min_idx])
+    
     return possible_minima
 
 def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15):
@@ -49,14 +69,17 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15):
     possible_minima = group_grad_to_grid(coordinates, gradient, 1, gradient_threshold)
 
     critical_points = []
-    for i in possible_minima:
-        # Identify local density
-        tree = KDTree(coordinates)
-        neighbors_idx = tree.query_ball_point(coordinates[i], r=radius)
-        local_grad = gradient[neighbors_idx]
-        if gradient[i] == min(local_grad):
-            critical_points.append([coordinates[i], density[i], gradient[i]])
-    print( " Number of critical points found: ", len(critical_points))
+    # Create KDTree and query neighbours for minima search in proximity 
+    tree = KDTree(coordinates)
+    neighbors_idx = [tree.query_ball_point(coordinates[i], r=radius) for i in possible_minima]
+    
+    # Process each point efficiently
+    for idx, point_idx in enumerate(possible_minima):
+        local_grad = gradient[neighbors_idx[idx]]
+        if gradient[point_idx] <= np.min(local_grad):  # Using <= instead of == for numerical stability
+            critical_points.append([coordinates[point_idx], density[point_idx], gradient[point_idx]])
+            
+    print("Number of critical points found: ", len(critical_points))
     return critical_points
 
 def get_unique_dimeric_CPs(CP_dimer, CP_monomer_1, CP_monomer_2):
