@@ -6,6 +6,7 @@
 ! Chaoyou Quan  <quanchaoyu@gmail.com>,
 ! Ruben Laplaza <rlaplaza@lct.jussieu.fr>
 ! Erna Wieduwilt <erna@sdu.dk>
+! Katarzyna Zator <katarzyna.zator@sorbonne-universite.fr>
 !
 ! nciplot is free software: you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -20,7 +21,7 @@
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 !
-! This is NCIPLOT Ver. 4.2.1 alpha
+! This is NCIPLOT Ver. 4.4
 ! Integration additivity problems. Solved. 
 ! Reproducibity proplems: Connected with the parallelization of the 
 ! calcprops_wfn routine. Lines 91-93/252 of routine calcprops_wfn commented. 
@@ -977,7 +978,7 @@ end if ! isnotcube
             intra = (cgrad(i, j, k) < 0d0)
             cgrad(i, j, k) = abs(cgrad(i, j, k))
             dimgrad = cgrad(i, j, k)
-            rho = crho(i, j, k)/100d0 ! why dividing by 100 ? , true no idea
+            rho = crho(i, j, k)/100d0
             ! write the dat file
             if (ludat > 0 .and. .not. intra .and. (abs(rho) < rhocut) .and. (dimgrad < dimcut) .and. &
                 abs(rho) > 1d-30) then
@@ -1001,7 +1002,7 @@ end if ! isnotcube
    end do
 
    !===============================================================================!
-   ! Write cube files.
+   ! Write the complete cube files. Commented out in favour of writing only intergation region
    !===============================================================================!
    ! if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
    ! if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
@@ -1030,9 +1031,6 @@ end if ! isnotcube
                            end if
                        enddo    
                   end if
-                !  if (((dimgrad > dimcut) .and. .not. rmbox_coarse(i, j, k))) then
-                !     rmbox_coarse(i, j, k) = .true. !inactive if dimgrad > dimcut
-                !  endif
                end do !i = 0, nstep(3) - 2
             end do !j = 0, nstep(3) - 2
          end do !k = 0, nstep(3) - 2
@@ -1056,6 +1054,7 @@ end if ! isnotcube
                   if (inter) then
                      if (any(abs(crho_n(i, j, k, 1:nfrag))*100d0 >= abs(crho(i, j, k)*rhoparam))) then
                         rmbox_coarse(i, j, k) = .true.
+                        cgrad(i, j, k) = 100d0
                      end if
                   end if
                   if (((dimgrad > dimcut) .and. .not. rmbox_coarse(i, j, k))) then
@@ -1076,7 +1075,7 @@ end if ! isnotcube
    ! integral of rho^n (n = 1, 1.5, 2, 2.5, 3, 4/3, 5/3, 0) and rho1*rho2, respectively over the volume and the surface: sum_rhon_vol, sum_rhon_area
    if (dointeg) then
    ! Refine rmbox. Remove boxes with points out of the rhocut range.
-   ! Otherwise the total integration is not recover by the integration by ranges.
+   ! Otherwise the total integration is not recovered by the integration by ranges.
        do k = 0, nstep(3) - 2
           do j = 0, nstep(2) - 2
              do l = 0, nstep(1) - 2
@@ -1096,8 +1095,6 @@ end if ! isnotcube
          end do     
  
       call dataGeom(sum_rhon_vol, sum_rhon_area, sum_signrhon_vol, xinc, nstep, crho, crho_n, rmbox_coarse, nfiles)
-    !  call dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, &
-    !              rmbox_coarse,rmbox_coarse, nfiles)
       write (uout, 117) sum_rhon_vol, sum_signrhon_vol, sum_rhon_area
       call system_clock(count=c5)
       write (*, "(A, F6.2, A)") ' Time for integration by cubes = ', real(dble(c5 - c4)/dble(cr), kind=8), ' secs'
@@ -1181,7 +1178,7 @@ end if ! isnotcube
    call system_clock(count=c6)
 
    !===============================================================================!
-   ! Alternative write .dat and cube files printing only integrated region.
+   ! Write out .dat and cube including ONLY integrated regions
    !===============================================================================!
    if (.true.) then
       do k = 0, nstep(3) - 1
@@ -1744,10 +1741,8 @@ contains
                    do i1 = i, i+1
                       do j1 = j, j+1
                          do k1 = k, k+1
-                        !    if (.not. checked_point(i1,j1,k1)) then 
                                 rmpoint_coarse(i1,j1,k1) = .false.
-                                checked_point(i1,j1,k1)  = .true. 
-                        !    endif       
+                                checked_point(i1,j1,k1)  = .true.     
                          end do
                       end do  
                    end do

@@ -22,8 +22,8 @@ def integrate_NCI(gradarray, densarray, grid, l_large = 0.2, l_small = 0.02, rho
                                 integrals = [little_integral(densarray[xx,yy,zz],n) for n in integral_powers]
                                 if -l_large < densarray[xx,yy,zz]/100 < -l_small:
                                     sum_rhon_vol_polar = np.add(sum_rhon_vol_polar, integrals)
-                                elif -l_small <= densarray[xx,yy,zz]/100 < 0:
+                                elif -l_small <= densarray[xx,yy,zz]/100 < l_small:
                                     sum_rhon_vol_vdw = np.add(sum_rhon_vol_vdw, integrals)
-                                elif 0 < densarray[xx,yy,zz]/100 < l_large:
+                                elif l_small < densarray[xx,yy,zz]/100 < l_large:
                                     sum_rhon_vol_rep = np.add(sum_rhon_vol_rep, integrals)
     return np.array([sum_rhon_vol_polar, sum_rhon_vol_vdw, sum_rhon_vol_rep])
