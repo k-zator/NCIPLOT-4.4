@@ -1824,10 +1824,6 @@ contains
                   i1 = (/i, i + 1/)
                   j1 = (/j, j + 1/)
                   k1 = (/k, k + 1/)
-                  ! Check to avoid passing several times over the same points
-                  ! Must be done by points
-                  ! if (.not.(Integrated(ii,jj,kk))
-                  !
                   ! n = 1, 1.5, 2, 2.5, 3, 4/3, 5/3: sum of rho^n
                   sum_rhon_vol(1) = sum_rhon_vol(1) + sum(abs(crho(i1, j1, k1)/100))*xinc(1)*xinc(2)*xinc(3)/8
                   sum_rhon_vol(2) = sum_rhon_vol(2) + sum(abs(crho(i1, j1, k1)/100)**1.5) &

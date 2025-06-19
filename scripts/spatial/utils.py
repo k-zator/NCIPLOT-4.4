@@ -121,11 +121,10 @@ def writecube(filename, cl, X_iso, labels, header, verbose=True):
     header : list of str
          Original cube file header.
     """
-    n_clusters = len(set(labels))
+
     for i, line in enumerate(header):
         if i == 2:
             gridinfo1 = line
-            n_at = int(gridinfo1.split()[0])
             o1, o2, o3 = (
                 float(gridinfo1.split()[1]),
                 float(gridinfo1.split()[2]),
@@ -151,12 +150,6 @@ def writecube(filename, cl, X_iso, labels, header, verbose=True):
     extr_x = [np.amin(X_iso[:, 0]), np.amax(X_iso[:, 0])]
     extr_y = [np.amin(X_iso[:, 1]), np.amax(X_iso[:, 1])]
     extr_z = [np.amin(X_iso[:, 2]), np.amax(X_iso[:, 2])]
-
-
-    #print("Extrema:")
-    #print(" x : ", extr_x)
-    #print(" y : ", extr_y)
-    #print(" z : ", extr_z)
 
     # We will take 5 more pts around extrema
     delta_x = [0, 0]
@@ -187,16 +180,6 @@ def writecube(filename, cl, X_iso, labels, header, verbose=True):
     if extr_z[1]+delta*incrz < e3:
         delta_z[1] = delta*incrz
 
-    #print("Delta: ")
-    #print(" x : ", delta_x)
-    #print(" y : ", delta_y)
-    #print(" z : ", delta_z)
-    
-
-    #print("Origin: ", o1, o2, o3)
-    #print("Incr: ", incrx, incry, incrz)
-
-
     npx = int(np.round((extr_x[1] - extr_x[0] + delta_x[0] + delta_x[1])/incrx)) + 1
     npy = int(np.round((extr_y[1] - extr_y[0] + delta_y[0] + delta_y[1])/incry)) + 1
     npz = int(np.round((extr_z[1] - extr_z[0] + delta_z[0] + delta_z[1])/incrz)) + 1
@@ -207,10 +190,6 @@ def writecube(filename, cl, X_iso, labels, header, verbose=True):
     pts[:, :, :, 0] = o1 + pts_idx[0] * incrx
     pts[:, :, :, 1] = o2 + pts_idx[1] * incry
     pts[:, :, :, 2] = o3 + pts_idx[2] * incrz
-
-    #print(pts[0, 0, 0])
-    #print(pts[-1, -1, -1])
-
 
     # We rebuild grid to find missing points of X_iso
     pts = pts.reshape((npx * npy * npz, 3))
@@ -225,24 +204,12 @@ def writecube(filename, cl, X_iso, labels, header, verbose=True):
         npwh_x = np.where(np.absolute(pts[:, 0] - pt[0])<1e-10)[0]
         npwh_y = np.where(np.absolute(pts[:, 1] - pt[1])<1e-10)[0]
         npwh_z = np.where(np.absolute(pts[:, 2] - pt[2])<1e-10)[0]
-        iso_idx[k] = int(np.intersect1d(np.intersect1d(npwh_x, npwh_y), npwh_z)) #reduce(np.intersect1d, (npwh_x, npwh_y, npwh_z)) # where we find pt from X_iso_pts in pts
-        #print(k, pt, iso_idx[k])
-        #print(pts[int(iso_idx[k])])
+        iso_idx[k] = int(np.intersect1d(np.intersect1d(npwh_x, npwh_y), npwh_z))
         grad_iso_extended[int(iso_idx[k])] = X_iso[k, 4]
         dens_iso_extended[int(iso_idx[k])] = X_iso[k, 3]
-    
-    #Checked until HERE so far, gotta keep looking!
-    # iso_idx = iso_idx.astype("int32")    
-    # for i, idx in enumerate(iso_idx):
-    #     grad_iso_extended[idx] = X_iso[i, 4]
-    #     dens_iso_extended[idx] = X_iso[i, 3]
-
 
     grad_cube = grad_iso_extended.reshape(npx, npy, npz)
     dens_cube = dens_iso_extended.reshape(npx, npy, npz)
-    #print(dens_cube[0, 0, 0])
-    #print(grad_cube[0, 0, 0])
-
 
     if verbose:
         print(
@@ -253,11 +220,6 @@ def writecube(filename, cl, X_iso, labels, header, verbose=True):
     with open(filename + "-cl" + str(cl) + "-grad.cube", "w") as f_out:
         f_out.write(" cl" + str(cl) + "_grad_cube\n")
         f_out.write(" 3d plot, gradient\n")
-        # f_out.write("   1  {}  {}  {}\n".format(o1, o2, o3))
-        # f_out.write("   {}  {}  {}  {}\n".format(npx, incrx, 0, 0))
-        # f_out.write("   {}  {}  {}  {}\n".format(npy, 0, incry, 0))
-        # f_out.write("   {}  {}  {}  {}\n".format(npz, 0, 0, incrz))
-        # f_out.write("   0   0.0  {}  {}  {}\n".format(o1, o2, o3))
         f_out.write("   1  {:.6f}  {:.6f}  {:.6f}\n".format(o1, o2, o3))
         f_out.write("   {}  {:.6f}  {:.6f}  {:.6f}\n".format(npx, incrx, 0, 0))
         f_out.write("   {}  {:.6f}  {:.6f}  {:.6f}\n".format(npy, 0, incry, 0))
@@ -281,11 +243,6 @@ def writecube(filename, cl, X_iso, labels, header, verbose=True):
     with open(filename + "-cl" + str(cl) + "-dens.cube", "w") as f_out:
         f_out.write(" cl" + str(cl) + "_dens_cube\n")
         f_out.write(" 3d plot, density\n")
-        # f_out.write("   1  {}  {}  {}\n".format(o1, o2, o3))
-        # f_out.write("   {}  {}  {}  {}\n".format(npx, incrx, 0, 0))
-        # f_out.write("   {}  {}  {}  {}\n".format(npy, 0, incry, 0))
-        # f_out.write("   {}  {}  {}  {}\n".format(npz, 0, 0, incrz))
-        # f_out.write("   0   0.0  {}  {}  {}\n".format(o1, o2, o3))
         f_out.write("   1  {:.6f}  {:.6f}  {:.6f}\n".format(o1, o2, o3))
         f_out.write("   {}  {:.6f}  {:.6f}  {:.6f}\n".format(npx, incrx, 0, 0))
         f_out.write("   {}  {:.6f}  {:.6f}  {:.6f}\n".format(npy, 0, incry, 0))

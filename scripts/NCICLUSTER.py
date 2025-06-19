@@ -4,7 +4,7 @@ import sys
 import time
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
-from spatial.UTILS import process_cube, write_cube
+from spatial.UTILS import process_cube, write_cube_select, write_cube, write_vmd
 from spatial.DIVIDE import find_CP_with_gradient
 from spatial.INTEGRATE import integrate_NCI
 from spatial.OPT_DICT import options_dict
@@ -48,7 +48,7 @@ with open(input_name, "r") as f:
 filename = files[0] # unless there are indeed multiple - but how?
 
 # Find critical points and distinguish the dimeric ones
-# Mrhos, densarray, header, grid, densarray1, densarray2 = process_cube(filename)
+# produces Mrhos: Matrix of rho, signed
 Mrhos, densarray, header, grid = process_cube(filename)
 CPs_both = find_CP_with_gradient(Mrhos, threshold, radius)
 nn = NearestNeighbors(n_neighbors=1, metric='euclidean')
@@ -65,7 +65,8 @@ for i in np.unique(labels):
     cluster_grad = [g if labels[ig] == i else 101 for ig, g in enumerate(Mrhos[:,4])]
     cluster_grad = np.reshape(cluster_grad, grid)
     integrals.append(integrate_NCI(cluster_grad, densarray, grid, rhoparam=s, l_large=l_large, l_small=l_small))
-    write_cube(filename, i, Mrhos, labels, header, grid)
+    write_cube_select(filename, i, Mrhos, labels, header, grid)
+
     print (" Cluster {}".format(i))
     print (" Interval        :       -{}       -{}  ".format(opt_dict["outer"], opt_dict["inner"]))
     print (" n=1.0           : {:.8f}".format(integrals[-1][0][0]))
@@ -95,3 +96,5 @@ for i in np.unique(labels):
     print (" n=5/3           : {:.8f}".format(integrals[-1][2][6]))
     print (" Volume          : {:.8f}".format(integrals[-1][2][7]))
     print(" # -----------------------------------------------------")
+
+write_vmd(filename, labels, opt_dict["isovalue"], verbose=opt_dict["verbose"])

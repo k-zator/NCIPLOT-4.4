@@ -1,6 +1,5 @@
 import numpy as np
 from multiprocessing import Pool
-import mmap
 
 def process_cube(filename):
     """Read and format cubes"""
@@ -99,47 +98,39 @@ def read_cube(filename, verbose=False):
 
     return header, pts, carray, atcoords
 
-def write_cube(filename, cl, X, labels, header, grid, verbose=False, parallel=True):
+def write_cube(filename, cl, X, labels, header, grid, verbose=False, parallel=False):
     """Write cube files with highly optimized performance."""
     import numpy as np
     from multiprocessing import Pool
     import os
-
     # Pre-calculate array dimensions 
     header_str = ''.join(header)
     
     # Vectorized data preparation
     mask = (labels == cl)[:, np.newaxis]
-    values = np.where(mask, X[:, [4, 3]], 101)
-    values = values.reshape(-1, 2, grid[2])
-
-    def format_data(data):
-        """Format data into rows of 6 values with scientific notation"""
-        formatted_lines = []
-        line = []
-        for val in data:
-            line.append(f"{val:13.5E}")
-            if len(line) == 6:
-                formatted_lines.append(" ".join(line))
-                line = []
-        if line:  # Handle any remaining values
-            formatted_lines.append(" ".join(line))
-        return "\n".join(formatted_lines) + "\n"
+    values = np.where(mask, X[:, [4, 3]], 100)
 
     def write_file(suffix, data):
         """Write a single cube file"""
         output_file = f"{filename}-cl{cl}-{suffix}.cube"
         
+        # Reshape the flattened data back to 3D grid
+        data_3d = data.reshape(grid)
+        
         with open(output_file, 'w') as f:
             # Write header
             f.write(header_str)
             
-            # Write data in chunks
-            chunk_size = 6000  # Process 1000 lines at a time
-            for i in range(0, len(data), chunk_size):
-                chunk = data[i:i + chunk_size]
-                formatted = format_data(chunk)
-                f.write(formatted)
+            # Write data respecting grid dimensions
+            values_per_line = 6
+            for x in range(grid[0]):
+                for y in range(grid[1]):
+                    row = data_3d[x, y, :]  # Get full z-row
+                    # Write row in chunks of 6
+                    for i in range(0, len(row), values_per_line):
+                        chunk = row[i:i + values_per_line]
+                        line = "".join(f"{val:13.5E}" for val in chunk)
+                        f.write(line + "\n")
 
     if parallel and len(values) > 1000000:  # Only use multiprocessing for large datasets
         with Pool() as pool:
@@ -152,3 +143,139 @@ def write_cube(filename, cl, X, labels, header, grid, verbose=False, parallel=Tr
 
     if verbose:
         print(f"  Wrote cube files {filename}-cl{cl}-[grad/dens].cube")
+
+
+def write_cube_select(filename, cl, X, labels, header, grid, verbose=False):
+    """ Write simplified cube file corresponding to only a segment of space for each cluster."""
+
+    orig_nx, orig_ny, orig_nz = grid
+    coords = X[:, :3].reshape(orig_nx, orig_ny, orig_nz, 3)
+    dens = X[:, 3].reshape(grid)
+    grad = X[:, 4].reshape(grid)
+    labels = labels.reshape(grid)
+
+    # Find the bounds of our selection in grid coordinates
+    mask = (labels == cl)
+    x_indices, y_indices, z_indices = np.where(mask)
+    
+    # Get min/max indices for each dimension
+    x_min, x_max = np.min(x_indices), np.max(x_indices)
+    y_min, y_max = np.min(y_indices), np.max(y_indices)
+    z_min, z_max = np.min(z_indices), np.max(z_indices)
+    
+    # New grid size
+    nx = x_max - x_min + 1
+    ny = y_max - y_min + 1
+    nz = z_max - z_min + 1
+
+    # Calculate grid spacing from original header
+    spacing = float(header[3].split()[1])
+    mins = coords[x_min, y_min, z_min]
+
+    # Create a new header
+    new_header = header[0]
+    new_header += header[1]
+    new_header += f"   1   {mins[0]:10.6f}  {mins[1]:10.6f}  {mins[2]:10.6f}\n"
+    new_header += f"   {nx}  {spacing:10.6f}    0.000000    0.000000\n"
+    new_header += f"   {ny}    0.000000  {spacing:10.6f}    0.000000\n"
+    new_header += f"   {nz}    0.000000    0.000000  {spacing:10.6f}\n"
+    new_header += f"   0   0.0 {mins[0]:10.6f} {mins[1]:10.6f} {mins[2]:10.6f}\n"
+
+    # Fill the new grid with 100s
+    selected_dens = np.full((nx, ny, nz), 100.0)
+    selected_grad = np.full((nx, ny, nz), 100.0)
+
+    # Place the selected values in the correct positions
+    for xi, yi, zi in zip(x_indices, y_indices, z_indices):
+        selected_dens[xi - x_min, yi - y_min, zi - z_min] = dens[xi, yi, zi]
+        selected_grad[xi - x_min, yi - y_min, zi - z_min] = grad[xi, yi, zi]
+
+    def write_file(suffix, values):
+        output_file = f"{filename}-cl{cl}-{suffix}.cube"
+        with open(output_file, 'w') as f:
+            f.writelines(new_header)
+            # Write in cube format: 6 values per line
+            flat = values.flatten()
+            for i in range(0, len(flat), 6):
+                line = "".join(f"{val:12.6f}" for val in flat[i:i+6])
+                f.write(line + "\n")
+
+    write_file("dens", selected_dens)
+    write_file("grad", selected_grad)
+    if verbose:
+        print(f"  Wrote cube files {filename}-cl{cl}-[grad/dens].cube")
+
+def write_vmd(filename, labels, isovalue, verbose=False, c3=False):
+    """ Write vmd script file for each cluster.
+    
+    Parameters
+    ----------
+    filename : str
+         Common string in cube files name.
+    labels : np.array
+         One dimensional array with integers that label the data in X_iso into different clusters.
+    """
+    if verbose:
+        print("  Writing vmd file {}...                 ".format(filename + ".vmd"), end="", flush=True)
+    with open(filename + "_divided.vmd", "w") as f:
+        f.write("#!/usr/local/bin/vmd \n")
+        f.write("# Display settings \n")
+        f.write("display projection   Orthographic \n")
+        f.write("display nearclip set 0.000000 \n")
+
+    with open(filename + "_divided.vmd", "a") as f:
+        f.write("# load new molecule \n")
+        f.write(
+            "mol new "
+            + filename
+            + "-dens.cube type cube first 0 last -1 step 1 filebonds 1 autobonds 1 waitfor all \n"
+        )
+        f.write("# \n")
+        f.write("# representation of the atoms \n")
+        f.write("mol delrep 0 top \n")
+        f.write("mol representation CPK 1.000000 0.300000 118.000000 131.000000 \n")
+        f.write("mol color Name \n")
+        f.write("mol selection {all} \n")
+        f.write("mol material Opaque \n")
+        f.write("mol addrep top \n")
+
+
+    for i_label, cl in enumerate(set(labels)):
+        if i_label > 32:
+            i_label = i_label - 32
+        with open(filename + "_divided.vmd", "a") as f:
+            f.write("# load new molecule \n")
+            f.write(
+                "mol new "
+                + filename
+                + "-cl"
+                + str(cl)
+                + "-dens.cube type cube first 0 last -1 step 1 filebonds 1 autobonds 1 waitfor all \n"
+            )
+            f.write(
+                "mol addfile "
+                + filename
+                + "-cl"
+                + str(cl)
+                + "-grad.cube type cube first 0 last -1 step 1 filebonds 1 autobonds 1 waitfor all \n"
+            )
+            f.write("# \n")
+            f.write("# add representation of the surface \n")
+            f.write("mol representation Isosurface {:.5f} 1 0 0 1 1 \n".format(isovalue))
+            if c3 == True:
+                f.write("mol color ColorID {} \n".format(i_label))
+            else:
+                f.write("mol color Volume 0 \n")
+            f.write("mol selection {all} \n")
+            f.write("mol material Opaque \n")
+            f.write("mol addrep top \n")
+            f.write("mol selupdate 2 top 0 \n")
+            f.write("mol colupdate 2 top 0 \n")
+            f.write("mol scaleminmax top 1 -7.0000 7.0000 \n")
+            f.write("mol smoothrep top 2 0 \n")
+            f.write("mol drawframes top 2 {now} \n")
+            f.write("color scale method BGR \n")
+            f.write("set colorcmds {{color Name {C} gray}} \n")
+    if verbose:
+        print("done")
+ 
