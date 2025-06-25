@@ -79,10 +79,13 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15):
         if gradient[point_idx] <= np.min(local_grad):  # Using <= instead of == for numerical stability
             critical_points.append([coordinates[point_idx], density[point_idx], gradient[point_idx]])
             
-    print("Number of critical points found: ", len(critical_points))
+    print(" Number of critical points found: ", len(critical_points))
     return critical_points
 
 def get_unique_dimeric_CPs(CP_dimer, CP_monomer_1, CP_monomer_2):
+    """Detemined which CPs are due to the intermolecular interaction is INTERMOLECULAR is not set"""
+    # but would require input of monomeric densities also
+
     UC = []
     C = np.array([i[0] for i in CP_dimer])
     C_1 = np.array([i[0] for i in CP_monomer_1])
@@ -94,3 +97,8 @@ def get_unique_dimeric_CPs(CP_dimer, CP_monomer_1, CP_monomer_2):
             UC.append(c)
     return np.array(UC)
 
+def find_CP_Atom_matches(CPs):
+    """Given the CPs' positions, find the atom-atom interactions they correspond to"""
+    mol1 = "mol1.xyz"
+    mol2 = "mol2.xyz"
+    return []

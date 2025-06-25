@@ -35,3 +35,40 @@ def options_dict(options):
                 raise ValueError("{} is not a valid option".format(op))
 
     return opt_dict
+
+def options_energy_calc(options):
+    opt_dict = {"isovalue": 1.0, "outer": 0.2, "inner": 0.02, "gamma": 0.85, "intermol": True, "ispromol": True, "clustering": False}
+
+    for i, op in enumerate(options[0::2]):
+        if op == "--help":
+            print(
+                "To run NCIENERGY do: ./ncienergy.py input_names [OPTIONS]",
+                "Options:",
+                "  --isovalue i       set the RDG isovalue, default 1.0",
+                "  --outer out        set the outer limit of integration range, default 0.20",
+                "  --inner in         set the inner limit of integration range, default 0.02",
+                "  --gamma g          set intermolecularity gamma value, default is 0.85",
+                "  --intermol im      determine if intermolecular mode is on, default True",
+                "  --ispromol p       determine if promolecular mode is on, default True",
+                "  --clustering c     determine if clustering mode in on, default False",
+                "  --help             display this help and exit",
+                sep="\n",
+            )
+            exit()
+        else:
+            if op == "--isovalue":
+                opt_dict["isovalue"] = float(options[2 * i + 1])
+            elif op == "--outer":
+                opt_dict["outer"] = float(options[2 * i + 1])
+            elif op == "--inner":
+                opt_dict["inner"] = float(options[2 * i + 1])
+            elif op == "--gamma":
+                opt_dict["gamma"] = float(options[2 * i + 1])
+            elif op == "--intermol":
+                opt_dict["intermol"] = float(options[2 * i + 1])
+            elif op == "--ispromol":
+                opt_dict["isprmol"] = float(options[2 * i + 1])
+            elif op == "--clustering":
+                opt_dict["cluster"] = float(options[2 * i + 1])
+            else:
+                raise ValueError("{} is not a valid option".format(op))

@@ -1010,8 +1010,8 @@ end if ! isnotcube
    call system_clock(count=c4)
    write (*, "(A, F6.2, A)") ' Time for writing outputs = ', real(dble(c4 - c3)/dble(cr), kind=8), ' secs'
   
-   !===============================================================================!
-   ! Integration for promolecular systems. Box removal.
+  !===============================================================================!
+  ! Integration for promolecular systems. Box removal.
   !===============================================================================!
    if (dointeg) then    ! dointeg
       if (ispromol) then
@@ -1040,8 +1040,8 @@ end if ! isnotcube
       endif  ! ispromol
    endif !dointeg
   
-   !===============================================================================!
-   ! Integration for non-promolecular systems. Box removal.
+  !===============================================================================!
+  ! Integration for non-promolecular systems. Box removal.
   !===============================================================================!
    if (dointeg) then
       if (.not. ispromol) then
