@@ -1,6 +1,5 @@
 """Classify nci regions"""
 
-from spatial.divide import *
-from spatial.utils import *
-from spatial.plot_new3D import *
-from spatial.integrate import *
+from spatial.DIVIDE import *
+from spatial.UTILS import *
+from spatial.INTEGRATE import *

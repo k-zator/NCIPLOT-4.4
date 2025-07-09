@@ -22,9 +22,6 @@
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 !
 ! This is NCIPLOT Ver. 4.4
-! Integration additivity problems. Solved. 
-! Reproducibity proplems: Connected with the parallelization of the 
-! calcprops_wfn routine. Lines 91-93/252 of routine calcprops_wfn commented. 
 
 program nciplot
    use param
@@ -39,8 +36,9 @@ program nciplot
    ! python ones
    integer(c_int) :: py_status
    character(kind=c_char, len=1000) :: command_ncicluster
+   character(kind=c_char, len=5000) :: command_ncienergy
    integer :: iounit_p1
-   logical :: doclustering
+   logical :: doclustering, ncienergy, isverbose
 
    integer, parameter :: mfiles = 100 ! max number of geometry files
 
@@ -55,8 +53,9 @@ program nciplot
    real*8 :: rdum, deltag
    ! the molecular info
    type(molecule), allocatable :: m(:)
+   character*(mline), allocatable :: filenames(:)
    ! logical units
-   integer :: lugc, ludc, luvmd, ludat, ludc1, ludc2
+   integer :: lugc, ludc, luvmd, ludat, lurc
    ! cubes
    real*8, allocatable, dimension(:, :, :) :: crho, cgrad
    ! ligand, intermolecular keyword
@@ -69,12 +68,12 @@ program nciplot
    integer :: nstep(3)
    ! noutput keyword
    integer :: noutput
-   ! cutoffs
-   real*8 :: rhocut, dimcut, maxrho, minrho
-   ! cutplot
-   real*8 :: rhoplot, isordg
-   ! discarding rho parameter
-   real*8 :: rhoparam, rhoparam2
+   ! RDG cutoff
+   real*8 :: dimcut, isordg
+   ! density (for NCI region only) cutoff
+   real*8 :: rhocut
+   ! intermolecularity cutoff
+   real*8 :: rhoparam
    ! properties of rho
    real*8 :: rho, grad(3), dimgrad, grad2, hess(3, 3)
    integer, parameter :: mfrag = 100 ! max number of fragments
@@ -149,16 +148,18 @@ program nciplot
    read (uin, *) nfiles   ! number of files to read
    if (nfiles > mfiles) call error('nciplot', 'too many files, increase mfiles', faterr)
    allocate (m(nfiles), stat=istat)
+   allocate(filenames(nfiles))
    if (istat /= 0) call error('nciplot', 'could not allocate memory for molecules', faterr)
    do ifile = 1, nfiles ! read files
       read (uin, '(a)') filein ! filein is read
       filein = trim(adjustl(filein))
+      filenames(ifile) = filein
       inquire (file=filein, exist=ok) ! check for existence
       if (.not. ok) &
          call error('nciplot', 'requested file does not exist: '//trim(filein), faterr)
       m(ifile) = readfile(filein)  ! reading wave function file (wfn or wfx) or structure (xyz file) or cube (cube file)
       if (ifile == 1) oname = filein(1:index(filein, '.', .true.) - 1)
-!        write(6,*) oname
+         ! write(6,*) oname
       do i = 1, m(ifile)%n       ! assigning atoms to fragments, every atom in ifile to fragment ifile
          m(ifile)%ifrag(i) = ifile
       end do
@@ -197,7 +198,7 @@ program nciplot
    ! by default, use density grids for heavier or charged atoms if promolecularity is on
    if (ispromol) then
    call init_rhogrid(m, nfiles)
-! this call was initially out of the if loop, but seems best inside
+   ! this call was initially out of the if loop, but seems best inside
       do i = 1, nfiles
          if (m(i)%ifile == ifile_xyz .and. (any(m(i)%z > atomic_zmax) .or. any(m(i)%q > 0))) then
             m(i)%ifile = ifile_grd
@@ -214,39 +215,37 @@ program nciplot
    !===============================================================================!
    ! Input files read and processed. Set defaults for running NCIPLOT now.
    !===============================================================================!
-   rhocut = 0.5d0 ! density cutoff
    dimcut = 1.0d0  ! RDG cutoff
+   isordg = 0.5d0
    if (.not.isnotcube) then
-      rhoplot=0.05d0 ! density cutoff for printing, in cube  case
-      isordg = 0.5d0
+      rhocut=0.05d0                 ! density cutoff for printing, in cube case
    endif
    if (isnotcube) then
-      xinc = 0.1d0/bohrtoa   ! grid step
+      xinc = 0.1d0/bohrtoa          ! grid step
    if (any(m(:)%ifile == ifile_wfn) .or. any(m(:)%ifile == ifile_wfx)) then
-      isordg = 0.5d0  ! RDG isosurface
-      rhoplot = 0.05d0 ! Density isosurface
+      rhocut = 0.05d0               ! Density isosurface
    else
-      isordg = 0.3d0  ! RDG isosurface
-      rhoplot = 0.07d0 ! Density isosurface
+      rhocut = 0.07d0               ! Density isosurface
    end if
-   rhoparam = 0.95d0  ! cutoffs for inter or intramolecularity
-   rhoparam2 = 0.75d0 !
-   noutput = 3        ! number of outputs
+   rhoparam = 0.85d0                ! cutoff for intermolecularity
+   noutput = 3                      ! number of outputs
    udat0 = 1
-   autor = .true.     ! build the cube automatically
-   ligand = .false.   ! ligand keyword
-   inter = .false.    ! intermolecular keyword
-   rthres = 0.75d0/bohrtoa     ! box limits around the molecule
-   dointeg = .false.  ! integrating properties or not
-   doclustering = .false. ! clustering python script NCICLUSTER
-   dorange = .false.  ! do not integrate range
-   firstgrid = .true. ! flag for the first adaptive grid run
+   autor = .true.                   ! build the cube automatically
+   ligand = .false.                 ! ligand keyword
+   inter = .false.                  ! intermolecular keyword
+   rthres = 0.75d0/bohrtoa          ! box limits around the molecule
+   dointeg = .false.                ! integrating properties or not
+   doclustering = .false.           ! clustering python script NCICLUSTER
+   ncienergy = .false.              ! energy calculation with python script NCIENERGY
+   isverbose = .false.              ! option to print complete output 
+   dorange = .false.                ! do not integrate range
+   firstgrid = .true.               ! flag for the first adaptive grid run
    if (.not. allocated(fginc)) then ! default setting CG2FG 3 4 2 1
       ng = 4
       allocate (fginc(ng))
       fginc = (/8, 4, 2, 1/)
    end if
-     !===============================================================================!
+   !===============================================================================!
    ! Estimating box around the molecule using xinit and xmax for the main system.
    !===============================================================================!
    xinit = m(1)%x(:, 1)
@@ -259,43 +258,44 @@ program nciplot
    enddo
    ntotal = 0
    do i = 1, nfiles
-      ntotal = ntotal + m(i)%n    ! compute the total number of atoms
+      ntotal = ntotal + m(i)%n ! compute the total number of atoms
    enddo
  else
-    xinc = m(1)%xinc0 ! if cube file, then only one molecule (file), and increment is contained in molecule type
-    xinit= m(1)%xinit0 ! same for initial point in grid
-    xmax= m(1)%xmax0 ! same for last
-    xcom = m(1)%xcom0 ! Number of points given by the input cube
+    xinc = m(1)%xinc0          ! if cube file, then only one molecule (file), and increment is contained in molecule type
+    xinit= m(1)%xinit0         ! same for initial point in grid
+    xmax= m(1)%xmax0           ! same for last
+    xcom = m(1)%xcom0          ! Number of points given by the input cube
     noutput = 3
    do i = 1, nfiles
-      ntotal = ntotal + m(i)%n    ! compute the total number of atoms
+      ntotal = ntotal + m(i)%n ! compute the total number of atoms
    enddo
-end if !isnotcube
+end if                         ! isnotcube
    !===============================================================================!
    ! Read optional keywords.
    ! Accepted keywords in this version:
    ! - RTHRES
    ! - LIGAND
    ! - RADIUS
-   ! - INTERMOLECULAR
-   ! - ONAME
-   ! - INCREMENTS
-   ! - OUTPUT
-   ! - CUBEparam
+   ! - CUBE_PARAM
    ! - ATCUBE
    ! - FRAGMENT
-   ! - CUTOFFS
-   ! - CUTPLOT
-   ! - ISORDG
-   ! - INTERCUT
-   ! - DGRID
-   ! - RANGE
-   ! - CG2FG
+   ! - ONAME
+   ! - OUTPUT
+   ! - INCREMENTS
+   ! - INTERMOLECULAR
    ! - INTEGRATE
+   ! - RANGE
+   ! - RDG_CUTOFF
+   ! - DENS_CUTOFF
+   ! - INTERMOL_CUTOFF
+   ! - DGRID
+   ! - VERBOSE
+   ! - CLUSTERING
+   ! - NCIENERGY
+   ! - CG2FG
    ! - FINE
    ! - ULTRAFINE
    ! - COARSE
-   ! - CLUSTERING
    !===============================================================================!
 
 do while (.true.) 
@@ -318,19 +318,20 @@ do while (.true.)
       case ("OUTPUT")
          read (line, *) noutput          ! number of output files
 
-      case ("CUTOFFS")          ! density and RDG cutoffs
-         read (line, *) rhocut, dimcut
+      case ("RDG_CUTOFF")          ! RDG cutoff (vertical in 2D plot) and to be used in VMD script
+         read (line, *) dimcut, isordg
 
-      case ("CUTPLOT")          ! density cutoff used in the VMD script
-         read (line, *) rhoplot, isordg
-
-      case ("ISORDG")           !RDG isosurface used in the RDG script
-         read (line, *) isordg
+      case ("DENS_CUTOFF")          ! density cutoff used in the VMD script
+         read (line, *) rhocut
 
       case ("CLUSTERING")  ! integration
          doclustering = .true.              ! python script cluster
-         write (uout, 138) 
+      
+      case ("NCIENERGY")
+         ncienergy = .true.
 
+      case ("VERBOSE")
+         isverbose = .true.
       end select
    enddo
    
@@ -372,7 +373,7 @@ do while (.true.)
          xinit = (x - rdum)/bohrtoa  ! box limits
          xmax = (x + rdum)/bohrtoa
 
-      case ("CUBEparam")         ! defining cube limits from coordinates in angstroms. Example:
+      case ("CUBE_PARAM")         ! defining cube limits from coordinates in angstroms. Example:
          autor = .false.    !CUBE x0,y0,z0,x1,y1,z1 format
          read (line, *) xinit, xmax
 
@@ -495,8 +496,8 @@ do while (.true.)
             rthres = 0.5d0/bohrtoa     ! box limits around the molecule
          end if
 
-      case ("INTERCUT")          ! cutoffs for intermolecularity definition
-         read (line, *) rhoparam, rhoparam2
+      case ("INTERMOL_CUTOFF")          ! cutoff for intermolecularity definition
+         read (line, *) rhoparam
 
       case ("DGRID")            ! using grids for promolecular densities
          do i = 1, nfiles
@@ -529,25 +530,24 @@ do while (.true.)
                enddo
             enddo
          endif
-      case ("INTEGRATE")  ! integration
+      case ("INTEGRATE")  ! integration of NCI regions
          dointeg = .true.              ! integrate
-!        end if
-        end select 
+
+      end select 
 end do
     ! all the previous options are not compatible with cube file inputs
     ! following are
 
 13 continue
 
-
    !===============================================================================!
    ! Defining box in detail now.
    !===============================================================================!
-    if (.not. isnotcube) then
-         autor=.false.
-         nstep= abs(xcom) !dimensions given on principal cube
-    end if
-    ! if we have a cube file, parameters are already known
+   if (.not. isnotcube) then
+        autor=.false.
+        nstep= abs(xcom) !dimensions given on principal cube
+   end if
+   ! if we have a cube file, parameters are already known
 
    if (autor) then ! automatically build grid, it has not been done
       if (ligand) then ! ligand mode is enabled
@@ -571,8 +571,7 @@ end do
    ! Information for user and output files. Default logical units first.
    !===============================================================================!
    lugc = -1 ! RDG logical unit
-   ludc1 = -1 ! Density logical unit
-   ludc2 = -1 ! Density logical unit
+   lurc = -1 ! Box logical unit
    ludc = -1 ! Density logical unit
    luvmd = -1 ! VMD logical unit
    write (uout, 131)
@@ -584,21 +583,21 @@ end do
    end if
    if (ligand) write (uout, 130) trim(m(udat0)%name)
    if (ispromol) write (uout, 133) ! tell user promolecular mode is on
-   write (uout, 120)
-   write (uout, 110) 'RHO  THRESHOLD   (au):', rhocut
-   write (uout, 110) 'RDG  THRESHOLD   (au):', dimcut
-   if (inter) write (uout, 110) 'DISCARDING RHO PARAM :', rhoparam
-   if (ligand) write (uout, 110) 'RADIAL THRESHOLD  (A):', rthres*bohrtoa
-   write (uout, *)
-!  write(uout,121) xinit, xmax, xinc, nstep ! this is currently not used because it will be adapted
+   if (doclustering) write (uout, 138) ! tell user clustering will happen
+   if (isverbose) write (uout, 120)
+   write (uout, 110) ' RHO  THRESHOLD   (au):', rhocut
+   write (uout, 110) ' RDG  THRESHOLD   (au):', dimcut
+   if (inter) write (uout, 110) ' INTERMOLECULARITY THRESHOLD :', rhoparam
+   if (ligand) write (uout, 110) ' RADIAL THRESHOLD  (A):', rthres*bohrtoa
+
    if (noutput >= 2) then    ! number of outputs --> 2: Only .CUBE files
       lugc = 9
-      ludc1 = 12
-      ludc2 = 13
+      lurc = 12
       ludc = 10
       luvmd = 11
       open (lugc, file=trim(oname)//"-grad.cube")    ! RDG cube file
       open (ludc, file=trim(oname)//"-dens.cube")    ! Density cube file
+      ! open (lurc, file=trim(oname)//"-rmbox.cube")   ! Boolean box cube file
       open (luvmd, file=trim(oname)//".vmd")         ! VMD script
       ! open (ludc1, file=trim(oname)//"-grad1.cube")   ! Density cube file for monomer1
       ! open (ludc2, file=trim(oname)//"-grad2.cube")   ! Density cube file for monomer2 - conditional for clustering only
@@ -614,25 +613,26 @@ end do
    !===============================================================================!
    ! Write output files.
    !===============================================================================!
-   write (uout, 122)
+   if (isverbose) write (uout, 122)
    if (noutput == 1 .or. noutput == 3) then
-      write (uout, 123) trim(oname)//".dat"
+      if (isverbose) write (uout, 123) trim(oname)//".dat"
    end if
 
    if (noutput >= 2) then
-      write (uout, 124) trim(oname)//"-grad.cube", &
+      if (isverbose) write (uout, 124) trim(oname)//"-grad.cube", &
          trim(oname)//"-dens.cube", &
          trim(oname)//".vmd"
    end if
    if (lugc > 0) call write_cube_header(lugc, 'grad_cube', '3d plot, reduced density gradient')
    if (ludc > 0) call write_cube_header(ludc, 'dens_cube', '3d plot, density')
+   ! if (lurc > 0) call write_cube_header(lurc, 'rmbox_cube', '3d plot, boolean integration box')
    ! if (ludc1 > 0) call write_cube_header(ludc1, 'dens_cube', '3d plot, density monomer 1')
    ! if (ludc2 > 0) call write_cube_header(ludc2, 'dens_cube', '3d plot, density monomer 2')
 
    !===============================================================================!
    ! Start run, using multi-level grids.
    !===============================================================================!
-    if (isnotcube) then
+   if (isnotcube) then
    ind_g = 1  ! index of the multi-level grids, starts at 1 always
    xinc_init = xinc ! initial coarse grid
    allocate (rho_n(1:nfiles))
@@ -641,8 +641,10 @@ end do
    xinc = fginc(ind_g)*xinc_init
    nstep = ceiling((xmax - xinit)/xinc)
 
-   write (uout, *)    ! punch info
-   write (uout, 121) ind_g, xinit, xmax, xinc, nstep
+   if (isverbose) then
+      write (uout, *)    ! punch info
+      write (uout, 121) ind_g, xinit, xmax, xinc, nstep
+   end if
    !===============================================================================!
    ! Allocate memory for density and gradient.
    !===============================================================================!
@@ -705,7 +707,7 @@ end do
                   do i0 = max(0, i - 1), i
                      do j0 = max(0, j - 1), j
                         do k0 = max(0, k - 1), k
-                           ! For each x, look for i, j, k indexes in the previous coarser grid
+                           ! For each x, look for i, j, k indices in the previous coarser grid
                            indx = floor(((/i0, j0, k0/)*xinc)/xinc_coarse)
                            indx = (/min(nstep_coarse(1) - 2, indx(1)), min(nstep_coarse(2) - 2, indx(2)), &
                                     min(nstep_coarse(3) - 2, indx(3))/)
@@ -735,8 +737,7 @@ end do
                rho = max(rho, 1d-30)
                grad2 = dot_product(grad, grad)
                dimgrad = sqrt(grad2)/(const*rho**(4.D0/3.D0))
-               intra = inter .and. ((any(rhom(1:nfrag) >= sum(rhom(1:nfrag))*rhoparam)) .or. &
-                                    (sum(rhom(1:nfrag)) < rhoparam2*rho))
+               intra = inter .and. (any(rhom(1:nfrag) >= sum(rhom(1:nfrag))*rhoparam))
                if (intra) dimgrad = -dimgrad !checks for interatomic, intra is true iff inter and condition hold
                !$omp critical (cubewrite)
                ! write to cube file, dont take into account rho values to low
@@ -758,7 +759,7 @@ end do
       end do  ! k=0,nstep(3)-1
       !$omp end parallel do
       call system_clock(count=c2)
-      write (*, "(A, F6.2, A)") ' Time for computing density & RDG = ', real(dble(c2 - c1)/dble(cr), kind=8), ' secs'
+      if (isverbose) write (*, "(A, F6.2, A)") ' Time for computing density & RDG = ', real(dble(c2 - c1)/dble(cr), kind=8), ' secs'
 
    else  ! wavefunction densities
       if (.not. inter) then
@@ -819,7 +820,7 @@ end do
                      do i0 = max(0, i - 1), i
                         do j0 = max(0, j - 1), j
                            do k0 = max(0, k - 1), k
-                              ! For each x, look for i, j, k indexes in the previous coarser grid
+                              ! For each x, look for i, j, k indices in the previous coarser grid
                               indx = floor(((/i0, j0, k0/)*xinc)/xinc_coarse)
                               indx = (/min(nstep_coarse(1) - 2, indx(1)), min(nstep_coarse(2) - 2, indx(2)), &
                                        min(nstep_coarse(3) - 2, indx(3))/)
@@ -831,8 +832,7 @@ end do
                         end do
                      end do
                      rho = crho(i,j,k)
-                     intra = inter .and. (any(abs(crho_n(i, j, k, 1:nfrag))*100d0 >= abs(crho(i, j, k))*rhoparam) .or. &
-                                    (sum(abs(crho_n(i, j, k, 1:nfrag))*100d0) < rhoparam2*abs(rho)))
+                     intra = inter .and. (any(crho_n(i, j, k, 1:nfrag) >= crho(i, j, k)*rhoparam))
                      if (intra) then !checks for interatomic
                         cgrad(i, j, k) = -cgrad(i, j, k)
                      end if
@@ -986,14 +986,12 @@ end if ! isnotcube
             endif ! rhocut/dimcut
    
             ! prepare the cube files !!modifJ
-!            if (isnotcube) then ! not same cut-off for cube and non-cube inputfiles
-             if ((abs(rho) > rhoplot) .or. (dimgrad > dimcut)) then
+             if ((abs(rho) > rhocut) .or. (dimgrad > dimcut)) then ! this is the isovalue and density criterion
                  cgrad(i, j, k) = 101d0
              endif !rho cutoff
-             if  (intra) then ! intermolecular points also to 100
+             if (intra) then ! intermolecular points also to 100
                   cgrad(i, j, k) = 101d0
              endif
-!           else
             if ((abs(rho) == 0.0) .and. (cgrad(i,j,k) .NE. 100.)) then
                cgrad(i,j,k) = 101d0  !NaN values has rho = 0.0, cgrad in that position would be 0
             endif
@@ -1024,19 +1022,19 @@ end if ! isnotcube
                   j1 = (/j, j + 1/)
                   k1 = (/k, k + 1/)
                   if (inter) then 
-                       do l =1, nfrag     
-                          IsInter =((abs(crho_n(i1, j1, k1, l)) .ge. abs(crho(i1, j1, k1))*rhoparam))
-                           if (count(IsInter).gt.0) then
-                               rmbox_coarse(i, j, k) = .true. !inactive
-                           end if
-                       enddo    
+                     do l = 1, nfrag     
+                        IsInter =((abs(crho_n(i1, j1, k1, l)) .ge. abs(crho(i1, j1, k1))*rhoparam))
+                        if (count(IsInter) .gt. 0) then
+                           rmbox_coarse(i, j, k) = .true. ! inactive
+                        end if
+                     enddo    
                   end if
                end do !i = 0, nstep(3) - 2
             end do !j = 0, nstep(3) - 2
          end do !k = 0, nstep(3) - 2
          !$omp end parallel do
          percent = real(count(rmbox_coarse), kind=8)/(real(size(rmbox_coarse), kind=8))*100d0
-         write (*, '(F6.2, A)') percent, '% of small boxes removed for promolecular integration'
+         if (isverbose) write (*, '(F6.2, A)') percent, '% of small boxes removed for promolecular integration'
       endif  ! ispromol
    endif !dointeg
   
@@ -1048,16 +1046,25 @@ end if ! isnotcube
          do k = 0, nstep(3) - 2
             do j = 0, nstep(2) - 2
                do i = 0, nstep(1) - 2
-                  x = xinit + (/i, j, k/)*xinc
-                  rho = abs(crho(i, j, k))/100d0
+                  i1 = (/i, i + 1/)
+                  j1 = (/j, j + 1/)
+                  k1 = (/k, k + 1/)
                   dimgrad = abs(cgrad(i, j, k))
                   if (inter) then
-                     if (any(abs(crho_n(i, j, k, 1:nfrag))*100d0 >= abs(crho(i, j, k)*rhoparam))) then
+                     !do l = 1, nfrag
+                     !   IsInter =((abs(crho_n(i1, j1, k1, l))*100d0 .ge. abs(crho(i1, j1, k1))*rhoparam))
+                     !   if (count(IsInter) .gt. 0) then
+                     !      rmbox_coarse(i, j, k) = .true. ! inactive
+                     !   end if
+                     !end do
+                     if (any(abs(crho_n(i, j, k, 1:nfrag))*100d0 .ge. abs(crho(i, j, k))*rhoparam)) then
                         rmbox_coarse(i, j, k) = .true.
                         cgrad(i, j, k) = 100d0
                      end if
                   end if
-                  if (((dimgrad > dimcut) .and. .not. rmbox_coarse(i, j, k))) then
+                  ! why is this check here again??? Isn't this decided in rmbox_coarse formation?
+                  ! It looks like a FIX to BROKEN idea of wfn intermolecularity
+                  if (((dimgrad > dimcut) .and. .not. rmbox_coarse(i, j, k))) then ! this is the isovalue
                      rmbox_coarse(i, j, k) = .true. !inactive
                   endif ! rhocut/dimcut
                enddo  !k = 0,nstep(3)-1
@@ -1074,8 +1081,7 @@ end if ! isnotcube
    ! compute geometry date in the region enclosed by the RDG isosurface:
    ! integral of rho^n (n = 1, 1.5, 2, 2.5, 3, 4/3, 5/3, 0) and rho1*rho2, respectively over the volume and the surface: sum_rhon_vol, sum_rhon_area
    if (dointeg) then
-   ! Refine rmbox. Remove boxes with points out of the rhocut range.
-   ! Otherwise the total integration is not recovered by the integration by ranges.
+   ! Refine rmbox to integrate only within the RHO_CUTOFF range
        do k = 0, nstep(3) - 2
           do j = 0, nstep(2) - 2
              do l = 0, nstep(1) - 2
@@ -1094,7 +1100,7 @@ end if ! isnotcube
              end do 
          end do     
  
-      call dataGeom(sum_rhon_vol, sum_rhon_area, sum_signrhon_vol, xinc, nstep, crho, crho_n, rmbox_coarse, nfiles)
+      call dataGeom(sum_rhon_vol, sum_rhon_area, sum_signrhon_vol, xinc, nstep, crho, crho_n, rmbox_coarse, cgrad, nfiles)
       write (uout, 117) sum_rhon_vol, sum_signrhon_vol, sum_rhon_area
       call system_clock(count=c5)
       write (*, "(A, F6.2, A)") ' Time for integration by cubes = ', real(dble(c5 - c4)/dble(cr), kind=8), ' secs'
@@ -1172,7 +1178,7 @@ end if ! isnotcube
       ! Additivy check
       sumrangedensity = sum(rho_range)
       densitydifference = Total_rho - sumrangedensity 
-      write (uout, 136) Total_rho, sumrangedensity ,densitydifference
+      if (isverbose) write (uout, 136) Total_rho, sumrangedensity ,densitydifference
    
    endif ! if range
    call system_clock(count=c6)
@@ -1199,6 +1205,7 @@ end if ! isnotcube
       end do
       if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
       if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
+      ! if (lurc > 0) call write_cube_body_l(lurc, nstep, rmbox_coarse)  ! rmbox_coarse
       ! if (ludc1 > 0) call write_cube_body(ludc1, nstep, crho_n(:, :, :, 1))         ! density monomer1
       ! if (ludc2 > 0) call write_cube_body(ludc2, nstep, crho_n(:, :, :, 2))         ! density monomer2
       call system_clock(count=c4)
@@ -1240,7 +1247,7 @@ end if ! isnotcube
    if (luvmd > 0) then
       write (luvmd, 114) trim(oname)//"-dens.cube"
       write (luvmd, 115) trim(oname)//"-grad.cube"
-      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -rhoplot*100D0, rhoplot*100D0, 2, 2
+      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -rhocut*100D0, rhocut*100D0, 2, 2
       close (luvmd)
    end if
 
@@ -1255,14 +1262,14 @@ end if ! isnotcube
        ! Close the file
        close(iounit_p1)
 
-      write(command_ncicluster, '(A,A,A,A,F5.2,A,F5.3,A,F5.3)') trim(adjustl(nciplot_home)), "/scripts/NCICLUSTER.py", & 
-         " tmp_ncicluster_file", & 
-         " --isovalue ", & 
+      write(command_ncicluster, '(A,A,A,A,F5.2,A,F5.3,A,F5.3)') trim(adjustl(nciplot_home)), 'scripts/NCICLUSTER.py', & 
+         ' tmp_ncicluster_file', & 
+         ' --isovalue ', & 
          dimcut, &
-         " --outer ", & 
+         ' --outer ', & 
          srhorange(3, 2), &          
-         " --inner ", & 
-         srhorange(3, 1)    
+         ' --inner ', & 
+         srhorange(3, 1)
 
       py_status = system(trim(adjustl(command_ncicluster)))
       ! Check the return py_status
@@ -1280,6 +1287,45 @@ end if ! isnotcube
       py_status=unlink("tmp_ncicluster_file")
    endif  ! clustering
 
+   !===============================================================================!
+   ! NCIENERGY python script integration. Author: Katarzyna Zator
+   !===============================================================================!
+   if (ncienergy) then
+      iounit_p1 = 501
+      open(unit=iounit_p1, file='tmp_ncienergy_file', status='replace', action='write')
+      ! Write the strings to the file
+      write(iounit_p1, '(A)') trim(adjustl(oname))
+      ! Close the file
+      close(iounit_p1)
+
+      write(command_ncienergy, '(A,A,A,A,F5.1,A,F5.2,A,F5.2,A,F5.2,A,L1,A,L1,A,L1,A,A,A,A)') &
+      trim(adjustl(nciplot_home)), 'scripts/NCIENERGY.py', & 
+      ' tmp_ncienergy_file', &
+      ' --isovalue ', dimcut, &
+      ' --outer ', srhorange(3, 2), &
+      ' --inner ', srhorange(3, 1), &
+      ' --gamma ', rhoparam, &
+      ' --intermol ', inter, &
+      ' --ispromol ', ispromol, &
+      ' --clustering ', doclustering, &
+      ' --mol1 ', filenames(1), &
+      ' --mol2 ', filenames(2)
+      py_status = system(trim(adjustl(command_ncienergy)))
+      ! Check the return py_status
+      select case (py_status)
+      case (0)
+         print *, "Python script executed successfully."
+      case (256)
+         print *, "Installation error: Required python library is not installed."
+      case (32512)
+         print *, "Python script execution failed, remeber to set NCIPLOT_HOME environment variable."
+      case default
+         print *, "Python script failed with unexpected status code: ", py_status
+         print *, "Remember to install all necessary Python libraries"
+      end select
+      py_status=unlink("tmp_ncienergy_file")
+   
+   endif
 
    !===============================================================================!
    ! Deallocate arrays, call clock end, close output and input files.
@@ -1304,6 +1350,7 @@ end if ! isnotcube
    ! Formats used by NCIPLOT.
    !===============================================================================!
 110 format(A, F5.2)
+111 format(A, L)
 
    ! VMD script
 114 format('#!/usr/local/bin/vmd', /, &
@@ -1347,9 +1394,7 @@ end if ! isnotcube
           '#some more',/)
 117 format('                                                     ', / &
           '----------------------------------------------------------------------', /, &
-          '                                                    ', / &
           '                     INTEGRATION DATA                        ', /, &
-          '                                                     ', / &
           '----------------------------------------------------------------------', /, &
           ' Integration  over the volumes of rho^n                               '/, &
           '----------------------------------------------------------------------', /, &
@@ -1362,7 +1407,6 @@ end if ! isnotcube
           ' n=5/3           :', 3X, F15.8, /, &
           ' Volume          :', 3X, F15.8, /, &
           ' rho-sum_i rho_i :', 3X, F15.8, / &
-          '                  ', / &
           '---------------------------------------------------------------------', /, &
           ' Integration  over the volumes of sign(lambda2)(rho)^n             '/, &
           '---------------------------------------------------------------------', /, &
@@ -1385,8 +1429,7 @@ end if ! isnotcube
           ' n=5/3           :', 3X, F15.8, /, &
           ' Area            :', 3X, F15.8, /, &
           ' rho-sum_i rho_i :', 3X, F15.8, /, &
-          '----------------------------------------------------------------------', /, &
-          '                   ',/) 
+          '----------------------------------------------------------------------')
 
 118 format('                                                     ', / &
           '----------------------------------------------------------------------', /, &
@@ -1405,7 +1448,6 @@ end if ! isnotcube
           ' n=5/3           :', 3X, F15.8, /, &
           ' Volume          :', 3X, F15.8, /, &
           ' rho-sum_i rho_i :', 3X, F15.8, / &
-          '                  ', / &
           '---------------------------------------------------------------------', /, &
           ' Integration  over the volumes of sign(lambda2)(rho)^n             '/, &
           '---------------------------------------------------------------------', /, &
@@ -1416,8 +1458,7 @@ end if ! isnotcube
           ' n=3.0           :', 3X, F15.8, /, &
           ' n=4/3           :', 3X, F15.8, /, &
           ' n=5/3           :', 3X, F15.8, /, &
-          '----------------------------------------------------------------------', /, &
-          '                   ',/)
+          '----------------------------------------------------------------------')
 
 120 format(/'-----------------------------------------------------'/ &
            '      Calculation details:'/ &
@@ -1454,14 +1495,12 @@ end if ! isnotcube
 
 134 format('                                                                      ', / &
           '----------------------------------------------------------------------', / &
-          '                                                                      ', / &
           '               RANGE INTEGRATION DATA                                 ', /, &
           '----------------------------------------------------------------------', /, &
           '                                                                      ')
 
 135 format('----------------------------------------------------------------------', /, &
           ' Interval        :', 2(3X, F15.8) '                     ', /, &
-          '                               ', / &
           '----------------------------------------------------------------------', /, &
           ' Integration  over the volumes of rho^n                               '/, &
           '----------------------------------------------------------------------', /, &
@@ -1474,7 +1513,6 @@ end if ! isnotcube
           ' n=5/3           :', 3X, F15.8, /, &
           ' Volume          :', 3X, F15.8, /, &
           ' rho-sum_i rho_i :', 3X, F15.8, / &
-          '                  ', / &
           '---------------------------------------------------------------------', /, &
           ' Integration  over the volumes of sign(lambda2)(rho)^n             '/, &
           '---------------------------------------------------------------------', /, &
@@ -1485,8 +1523,7 @@ end if ! isnotcube
           ' n=3.0           :', 3X, F15.8, /, &
           ' n=4/3           :', 3X, F15.8, /, &
           ' n=5/3           :', 3X, F15.8, /, &
-          '---------------------------------------------------------------------', /, &
-          '                         ',/) 
+          '---------------------------------------------------------------------')
 
 
 136 format(' Additivity Check', /, & 
@@ -1501,11 +1538,8 @@ end if ! isnotcube
            '             Absolute Values will be assigned                              ',/)
 
 
-138 format('                                                     ', / &
-          '-------------------------------------------------------------------', /, &
-          ' CLUSTERING option specified - NCICLUSTER will be used             ', /, &
-          '-------------------------------------------------------------------', /, &
-          '                         ',/) 
+138 format('      CLUSTERING option specified - NCICLUSTER will be used     '/)
+
 contains
 
    !===============================================================================!
@@ -1550,6 +1584,32 @@ contains
       close (lu)
 
    end subroutine write_cube_body
+
+   subroutine write_cube_body_l(lu, n, c)
+
+      integer, intent(in) :: lu
+      integer, intent(in) :: n(3)
+      logical*4, intent(in) :: c(0:n(1) - 1, 0:n(2) - 1, 0:n(3) - 1)
+
+      integer :: i, j, k
+      integer :: vals(0:n(3)-1)
+
+      do i = 0, n(1) - 1
+         do j = 0, n(2) - 1
+            ! Convert logicals to integer (0/1) for this line
+            do k = 0, n(3) - 1
+               if (c(i, j, k)) then
+                  vals(k) = 1
+               else
+                  vals(k) = 0
+               end if
+            end do
+            write (lu, '(6(1x,i1))') (vals(k), k=0, n(3) - 1)
+         enddo
+      enddo
+      close (lu)
+
+   end subroutine write_cube_body_l
 
    ! write the .mesh file
    subroutine write_mesh_file(lumesh, lusol, xinit, xinc, nstep, cgrad, xinc_coarse, rmbox_coarse, nstep_coarse, vert_use)
@@ -1709,7 +1769,6 @@ contains
                             (cgrad(i1, j1, k1) .lt. 0))
 
                if (count(flag_grad) .lt. 8) then !original criterion
-             !  if  (count(flag_grad) .lt.4) then !To be consistent with range integration. Gives irregular s=1 surfaces
                   rmbox_coarse(i, j, k) = .false.  ! active box
                endif
 
@@ -1717,7 +1776,7 @@ contains
          end do
       end do
       percent = real(count(rmbox_coarse), kind=8)/(real(size(rmbox_coarse), kind=8))*100d0
-      write (*, '(F6.2, A)') percent, '% of small boxes are removed.'
+      if (isverbose) write (*, '(F6.2, A)') percent, '% of small boxes are removed.'
    end subroutine build_rmbox_coarse
 
    subroutine rmboxtopoint(nstep, rmbox_coarse, rmpoint_coarse)
@@ -1796,13 +1855,14 @@ contains
    end subroutine cube2tetra
 
 ! compute NCI geometry of the region enclosed by RDG isosurface
-   subroutine dataGeom(sum_rhon_vol, sum_rhon_area, sum_signrhon_vol, xinc, nstep, crho, crho_n, rmbox_coarse, nfiles)
+   subroutine dataGeom(sum_rhon_vol, sum_rhon_area, sum_signrhon_vol, xinc, nstep, crho, crho_n, rmbox_coarse, cgrad, nfiles)
       real*8, intent(inout) :: sum_rhon_vol(9)
       real*8, intent(inout) :: sum_rhon_area(9)
       real*8, intent(inout) :: sum_signrhon_vol(7)
       real*8, intent(in) :: xinc(3)
       integer, intent(in) :: nstep(3)
       real*8, intent(in) :: crho(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
+                            cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
                             crho_n(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1, 1:nfiles)
       logical, intent(in) :: rmbox_coarse(0:nstep(1) - 2, 0:nstep(2) - 2, 0:nstep(3) - 2)
       integer :: i, j, k, n
@@ -1820,7 +1880,7 @@ contains
       do i = 0, nstep(1) - 2
          do j = 0, nstep(2) - 2
             do k = 0, nstep(3) - 2
-               if (.not. rmbox_coarse(i, j, k)) then
+               if (.not. rmbox_coarse(i, j, k)) then ! if (cgrad(i, j, k) < 100d0) then !
                   i1 = (/i, i + 1/)
                   j1 = (/j, j + 1/)
                   k1 = (/k, k + 1/)

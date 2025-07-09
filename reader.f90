@@ -404,7 +404,7 @@ contains
       character*2, allocatable :: wfcl(:)
       character*(mline) :: econf
       integer :: nn
-      logical :: exist
+      logical :: exist, isverbose
       character*(mline) :: file
 
       integer, parameter :: lu = 10
@@ -527,12 +527,12 @@ contains
          end if
       end do
 
-      write (uout, '("+ Read density file : ", A)') trim(file)
-      write (uout, '("  Log grid (r = a*e^(b*x)) with a = ",1p,E12.4,", b = ",E12.4)') g%a, g%b
-      write (uout, '("  Num. grid points = ",I5, ", rmax (bohr) = ",F10.4)') g%ngrid, g%rmax
-      write (uout, '("  Integrated charge = ",F20.8)') sum(g%f*g%r**3*g%b*4d0*pi)
-      write (uout, '("  El. conf. : ",A)') trim(econf)
-      write (uout, *)
+      if (isverbose) write (uout, '("+ Read density file : ", A)') trim(file)
+      if (isverbose) write (uout, '("  Log grid (r = a*e^(b*x)) with a = ",1p,E12.4,", b = ",E12.4)') g%a, g%b
+      if (isverbose) write (uout, '("  Num. grid points = ",I5, ", rmax (bohr) = ",F10.4)') g%ngrid, g%rmax
+      if (isverbose) write (uout, '("  Integrated charge = ",F20.8)') sum(g%f*g%r**3*g%b*4d0*pi)
+      if (isverbose) write (uout, '("  El. conf. : ",A)') trim(econf)
+      if (isverbose) write (uout, *)
 
       ! Cleanup
       deallocate (rr, wfcin, wfcl, occ)

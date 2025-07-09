@@ -128,7 +128,7 @@ contains
 
       write (uout, 1000)
 1000  format(' # ----------------- NCIPLOT ------------------------', &
-             /, ' # --- PLOTTING NON COVALENT INTERACTION REGIONS ----', /, &
+          /, ' # --- PLOTTING NON COVALENT INTERACTION REGIONS ----', /, &
              ' # ---             E.R. Johnson                  ----', /, &
              ' # ---          J. Contreras-Garcia              ----', /, &
              ' # ----------    Duke University         ------------', /, &
@@ -138,14 +138,14 @@ contains
              ' #                                                   ', /, &
              ' # ---               R. A. Boto                   ---', /, &
              ' # ---                 C. Quan                     --', /, &
-             ' # --------  Université Pierre et Marie Curie -------', / &
+             ' # --------  Université Pierre et Marie Curie -------', /, &
              ' # --------------------------------------------------', /, &
              ' # ---              Please cite                  ----', /, &
              ' # --J. Am. Chem. Soc., 2010, 132 (18), pp 6498–6506-', /, &
-             ' # --------------------------------------------------', / &
+             ' # --------------------------------------------------', /, &
              ' # --------------------------------------------------', /, &
              ' # ---     Contributions for the wfn properties  ----', /, &
-             ' # ---      from H. L. Schmider are acknowledged  ---', /, &
+             ' # ---    from H. L. Schmider are acknowledged    ---', /, &
              ' # --------------------------------------------------', /, &
              ' # --------------------------------------------------', /, &
              ' # ---     Contributions for the wfx reader      ----', /, &
@@ -153,9 +153,14 @@ contains
              ' # --------------------------------------------------', /, &
              ' # --------------------------------------------------', /, &
              ' # ---     Contributions for the integration --------', /, &
-             ' # ---      algorithms from Erna Wieduwilt    --------',/, &
-             ' # ---             are acknowledged           --------',/, &
-             ' # ---------------------------------------------------',/, &   
+             ' # ---      algorithms from Erna Wieduwilt    -------', /, &
+             ' # ---             are acknowledged           -------', /, &
+             ' # --------------------------------------------------', /, &
+             ' # --------------------------------------------------', /, &
+             ' # ---   Contributions for the clustering and    ----', /, &
+             ' # ---  energy algorithms from Katarzyna Zator   ----', /, &
+             ' # ---             are acknowledged              ----', /, &
+             ' # --------------------------------------------------', /, &   
              ' #')
 
    end subroutine header

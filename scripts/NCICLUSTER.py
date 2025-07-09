@@ -4,8 +4,8 @@ import sys
 import time
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
-from spatial.UTILS import process_cube, write_cube_select, write_cube, write_vmd
-from spatial.DIVIDE import find_CP_with_gradient, find_CP_Atom_matches, write_CPs_xyz
+from spatial.UTILS import process_cube, write_cube_select, write_vmd
+from spatial.DIVIDE import find_CP_with_gradient, write_CPs_xyz
 from spatial.INTEGRATE import integrate_NCI_cluster
 from spatial.OPT_DICT import options_dict
 
