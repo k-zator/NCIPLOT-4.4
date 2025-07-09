@@ -84,7 +84,6 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15):
 
 def get_unique_dimeric_CPs(CP_dimer, CP_monomer_1, CP_monomer_2):
     """Detemined which CPs are due to the intermolecular interaction is INTERMOLECULAR is not set"""
-    # but would require input of monomeric densities also
 
     UC = []
     C = np.array([i[0] for i in CP_dimer])
@@ -97,8 +96,41 @@ def get_unique_dimeric_CPs(CP_dimer, CP_monomer_1, CP_monomer_2):
             UC.append(c)
     return np.array(UC)
 
-def find_CP_Atom_matches(CPs):
-    """Given the CPs' positions, find the atom-atom interactions they correspond to"""
-    mol1 = "mol1.xyz"
-    mol2 = "mol2.xyz"
-    return []
+def write_CPs_xyz(CPs, filename):
+    """Write critical points to an XYZ format with labels CP1, CP2, ... """
+    with open(f"{filename}_CPs.xyz", "w") as f:
+        f.write(str(len(CPs))+"\n")
+        f.write("Critical points for the complex NCI clustering of interactions\n")
+        for i, cp in enumerate(CPs, 1):
+            coords = cp[0] if isinstance(cp[0], (list, np.ndarray)) else cp
+            f.write(f"CP{i}   {coords[0]:.6f}   {coords[1]:.6f}   {coords[2]:.6f}\n")
+
+
+def find_CP_Atom_matches(CPs, mol1, mol2):
+    """Given the CPs' positions, find the atom-atom interactions they correspond to
+        Returns a list of lists: [CP_position, mol1_atom_idx, mol2_atom_idx] """
+    
+    def read_xyz(filename):
+        with open(filename, 'r') as f:
+            lines = f.readlines()[2:]
+            coords = []
+            for line in lines:
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                coords.append([float(x) for x in parts[1:4]])
+            return np.array(coords, dtype=float)
+    
+    cp_coords = read_xyz(CPs)
+    mol1_coords = read_xyz(mol1)
+    mol2_coords = read_xyz(mol2)
+
+    matches = []
+    for cp in cp_coords:
+        dists1 = np.linalg.norm(mol1_coords - cp, axis=1)
+        idx1 = np.argmin(dists1)
+        dists2 = np.linalg.norm(mol2_coords - cp, axis=1)
+        idx2 = np.argmin(dists2)
+        matches.append([int(idx1), int(idx2)])
+
+    return matches

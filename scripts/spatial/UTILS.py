@@ -15,11 +15,13 @@ def process_cube(filename):
     Mrhos = Mrhos.reshape(densarray.size, 5)
     # X_iso = Mrhos[Mrhos[:,4] <= s+1e-6] # just the isosurface
     grid = (nx, ny, nz)
+    # and voxel for integration normalisation
+    dvol = (float(header[3].split()[1]))*(float(header[4].split()[2]))*(float(header[5].split()[3]))
 
     # and specifically monomeric densities
     # _, _, densarray1, _  = read_cube(f"{filename}-dens1.cube")
     # _, _, densarray2, _  = read_cube(f"{filename}-dens2.cube")
-    return Mrhos, densarray, header, grid #, densarray1, densarray2
+    return Mrhos, densarray, header, grid, dvol #, densarray1, densarray2
 
 def read_cube(filename, verbose=False):
     """Reads in a cube file and returns grid information, atomic position, and a 3D array of cube values.

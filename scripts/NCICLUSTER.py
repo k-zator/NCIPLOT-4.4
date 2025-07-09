@@ -5,8 +5,8 @@ import time
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from spatial.UTILS import process_cube, write_cube_select, write_cube, write_vmd
-from spatial.DIVIDE import find_CP_with_gradient, find_CP_Atom_matches
-from spatial.INTEGRATE import integrate_NCI
+from spatial.DIVIDE import find_CP_with_gradient, find_CP_Atom_matches, write_CPs_xyz
+from spatial.INTEGRATE import integrate_NCI_cluster
 from spatial.OPT_DICT import options_dict
 
 """
@@ -46,30 +46,30 @@ files = []
 with open(input_name, "r") as f:
     for line in f:
         files.append(line[:-1])
-filename = files[0] # unless there are indeed multiple - but how?
+filename = files[0]
 
 # Find critical points and distinguish the dimeric ones
 # produces Mrhos: Matrix of rho, signed
-Mrhos, densarray, header, grid = process_cube(filename)
-CPs_both = find_CP_with_gradient(Mrhos, threshold, radius)
-
-# Also, detemine what atom-atom interaction this corresponds to
-Atom_Atom_CPs = find_CP_Atom_matches(CPs_both)
+Mrhos, densarray, header, grid, dvol = process_cube(filename)
+CPs = find_CP_with_gradient(Mrhos, threshold, radius)
+write_CPs_xyz(CPs, filename)
 
 nn = NearestNeighbors(n_neighbors=1, metric='euclidean')
-nn.fit([i[0] for i in CPs_both])
+nn.fit([i[0] for i in CPs])
 # Find the nearest cluster center for each point in XYZ
 _, indices = nn.kneighbors(Mrhos[:,:3])
 labels = indices.flatten() # cluster labels cf. CPs
+
 print("")
 print("----------------------------------------------------------------------")
 print("      RANGE CLUSTERED INTEGRATION DATA over the volumes of rho^n      ")
 
+
 integrals = []
 for i in np.unique(labels): # Now, select each cluster at a time
-    cluster_grad = [g if labels[ig] == i else 101 for ig, g in enumerate(Mrhos[:,4])]
-    cluster_grad = np.reshape(cluster_grad, grid)
-    integrals.append(integrate_NCI(cluster_grad, densarray, grid, rhoparam=s, l_large=l_large, l_small=l_small))
+    #cluster_grad = [g if labels[ig] == i else 101 for ig, g in enumerate(Mrhos[:,4])]
+    cluster_grad = np.reshape(Mrhos[:,4], grid)
+    integrals.append(integrate_NCI_cluster(cluster_grad, densarray, grid, dvol, labels, i, rhoparam=s, l_large=l_large, l_small=l_small))
     write_cube_select(filename, i, Mrhos, labels, header, grid)
     print("----------------------------------------------------------------------")   
     print(" Cluster {}".format(i)) # ADD ATOM_ATOM_CPS HERE
