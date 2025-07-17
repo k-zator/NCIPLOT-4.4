@@ -86,11 +86,10 @@ contains
       dz(:,:) = 0d0
       d2(:,:) = 0d0
 
-    !# Roberto: Does not work. Parallelization is not working.  
-      ! run over y and z 
-    !  !$omp parallel do private (ip,jp,kp,hess,tp,gg,chi,phi,maxc,ldopri,dx,dy,dz,d2,&
-    !  !$omp nn,ipri,iat,al,ex,x0,l,xl,xl2,grad2,rho53,ebose,df,hvecs,wk1,wk2,&
-    !  !$omp istat,rhoaux) schedule(static)
+      ! Parallelization is not working.  
+      !!$omp parallel do private (ip,jp,kp,hess,tp,gg,chi,phi,maxc,ldopri,dx,dy,dz,d2,&
+      !!$omp nn,ipri,iat,al,ex,x0,l,xl,xl2,grad2,rho53,ebose,df,hvecs,wk1,wk2,&
+      !!$omp istat,rhoaux) schedule(static)
 
       do j = 0, n(2) - 1
          jp = j + 1
@@ -102,10 +101,7 @@ contains
             tp = 0d0
             gg = 0d0
 
-            ! run over molecules
-            ! Original
-            do m = 1, nmol
-
+            do m = 1, nmol ! run over molecules
                ! allocate primitive evaluation array
                allocate (chi(mol(m)%npri, 10), phi(mol(m)%nmo, 10))
 
@@ -119,7 +115,6 @@ contains
                enddo
 
                ! calculate distances
-
                do iat = 1, mol(m)%n
                   do i = 0, n(1) - 1
                      ip = i + 1
@@ -134,8 +129,8 @@ contains
                do i = 0, n(1) - 1
                   ip = i + 1
                   nn = 0
-                  do ityp = 1, mol(m)%maxntyp
-                     do ipria = nn + 1, nn + mol(m)%ntyp(ityp)
+                  do ityp = 1, mol(m)%maxntyp ! primitive types
+                     do ipria = nn + 1, nn + mol(m)%ntyp(ityp) ! primitives of this type
                         ipri = mol(m)%intyp(ipria)
                         iat = mol(m)%icenter(ipri)
                         al = mol(m)%e(ipri)
@@ -144,7 +139,7 @@ contains
                         x0 = (/dx(ip, iat), dy(ip, iat), dz(ip, iat)/)
 
                         call index0(ityp, l)
-                        do ix = 1, 3
+                        do ix = 1, 3 ! components (value, derivatives)
                            if (l(ix) == 0) then
                               xl(ix, 0) = 1d0
                               xl(ix, 1) = 0d0
@@ -188,7 +183,7 @@ contains
                         chi(ipri, 10) = (xl(3, 1) - 2*al*x0(3)**(l(3) + 1))* &
                                         (xl(2, 1) - 2*al*x0(2)**(l(2) + 1))*xl(1, 0)*ex
 
-                        do ix = 1, 10
+                        do ix = 1, 10 ! components (value, derivatives)
                            ldopri(ipri, ix) = (abs(chi(ipri, ix))*maxc(ipri) > cutoff_pri)
                         enddo
                      enddo ! ipria = nn+1, nn+ntyp
@@ -209,18 +204,25 @@ contains
 
                   ! contribution to the density, etc.
                   do imo = 1, mol(m)%nmo
-                     rhoaux(ip) = rhoaux(ip) + mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 1)
-                     gg(ip, 1) = gg(ip, 1) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 2)
-                     gg(ip, 2) = gg(ip, 2) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 3)
-                     gg(ip, 3) = gg(ip, 3) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 4)
+                     rhoaux(ip) = rhoaux(ip) + mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 1)*mol(m)%weight !now weighed
+                     gg(ip, 1) = gg(ip, 1) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 2)*mol(m)%weight
+                     gg(ip, 2) = gg(ip, 2) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 3)*mol(m)%weight
+                     gg(ip, 3) = gg(ip, 3) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 4)*mol(m)%weight
                 !     write(*,*) rhoaux(ip)
-                     hess(ip, 1, 1) = hess(ip, 1, 1) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 5) + phi(imo, 2)**2)
-                     hess(ip, 2, 2) = hess(ip, 2, 2) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 6) + phi(imo, 3)**2)
-                     hess(ip, 3, 3) = hess(ip, 3, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 7) + phi(imo, 4)**2)
-                     hess(ip, 1, 2) = hess(ip, 1, 2) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 8) + phi(imo, 2)*phi(imo, 3))
-                     hess(ip, 1, 3) = hess(ip, 1, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 9) + phi(imo, 2)*phi(imo, 4))
-                     hess(ip, 2, 3) = hess(ip, 2, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 10) + phi(imo, 3)*phi(imo, 4))
-                     tp(ip) = tp(ip) + mol(m)%occ(imo)*(phi(imo, 2)*phi(imo, 2) + phi(imo, 3)*phi(imo, 3) + phi(imo, 4)*phi(imo, 4)) 
+                     hess(ip, 1, 1) = hess(ip, 1, 1) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 5) &
+                        + phi(imo, 2)**2)*mol(m)%weight
+                     hess(ip, 2, 2) = hess(ip, 2, 2) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 6) &
+                        + phi(imo, 3)**2)*mol(m)%weight
+                     hess(ip, 3, 3) = hess(ip, 3, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 7) &
+                        + phi(imo, 4)**2)*mol(m)%weight
+                     hess(ip, 1, 2) = hess(ip, 1, 2) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 8) &
+                        + phi(imo, 2)*phi(imo, 3))*mol(m)%weight
+                     hess(ip, 1, 3) = hess(ip, 1, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 9) &
+                        + phi(imo, 2)*phi(imo, 4))*mol(m)%weight
+                     hess(ip, 2, 3) = hess(ip, 2, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 10) &
+                        + phi(imo, 3)*phi(imo, 4))*mol(m)%weight
+                     tp(ip) = tp(ip) + mol(m)%occ(imo)*(phi(imo, 2)*phi(imo, 2) + phi(imo, 3)*phi(imo, 3) &
+                        + phi(imo, 4)*phi(imo, 4))*mol(m)%weight 
                      !write(*,*) hess(ip,1,1), hess(ip,1,2), hess(ip,1,3), hess(ip,2,2), hess(ip,2,3), hess(ip,3,3) 
                   enddo
                enddo ! i = 0, n-1
@@ -424,17 +426,24 @@ contains
 
                ! contribution to the density, etc.
                do imo = 1, mol(m)%nmo
-                  rhoaux(ip) = rhoaux(ip) + mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 1)
-                  gg(ip, 1) = gg(ip, 1) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 2)
-                  gg(ip, 2) = gg(ip, 2) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 3)
-                  gg(ip, 3) = gg(ip, 3) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 4)
-                  hess(ip, 1, 1) = hess(ip, 1, 1) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 5) + phi(imo, 2)**2)
-                  hess(ip, 2, 2) = hess(ip, 2, 2) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 6) + phi(imo, 3)**2)
-                  hess(ip, 3, 3) = hess(ip, 3, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 7) + phi(imo, 4)**2)
-                  hess(ip, 1, 2) = hess(ip, 1, 2) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 8) + phi(imo, 2)*phi(imo, 3))
-                  hess(ip, 1, 3) = hess(ip, 1, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 9) + phi(imo, 2)*phi(imo, 4))
-                  hess(ip, 2, 3) = hess(ip, 2, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 10) + phi(imo, 3)*phi(imo, 4))
-                  tp(ip) = tp(ip) + mol(m)%occ(imo)*(phi(imo, 2)*phi(imo, 2) + phi(imo, 3)*phi(imo, 3) + phi(imo, 4)*phi(imo, 4))
+                  rhoaux(ip) = rhoaux(ip) + mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 1)*mol(m)%weight !now weighed
+                  gg(ip, 1) = gg(ip, 1) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 2)*mol(m)%weight
+                  gg(ip, 2) = gg(ip, 2) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 3)*mol(m)%weight
+                  gg(ip, 3) = gg(ip, 3) + 2*mol(m)%occ(imo)*phi(imo, 1)*phi(imo, 4)*mol(m)%weight
+                  hess(ip, 1, 1) = hess(ip, 1, 1) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 5) &
+                     + phi(imo, 2)**2)*mol(m)%weight
+                  hess(ip, 2, 2) = hess(ip, 2, 2) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 6) &
+                     + phi(imo, 3)**2)*mol(m)%weight
+                  hess(ip, 3, 3) = hess(ip, 3, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 7) &
+                     + phi(imo, 4)**2)*mol(m)%weight
+                  hess(ip, 1, 2) = hess(ip, 1, 2) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 8) &
+                     + phi(imo, 2)*phi(imo, 3))*mol(m)%weight
+                  hess(ip, 1, 3) = hess(ip, 1, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 9) &
+                     + phi(imo, 2)*phi(imo, 4))*mol(m)%weight
+                  hess(ip, 2, 3) = hess(ip, 2, 3) + 2*mol(m)%occ(imo)*(phi(imo, 1)*phi(imo, 10) &
+                     + phi(imo, 3)*phi(imo, 4))*mol(m)%weight
+                  tp(ip) = tp(ip) + mol(m)%occ(imo)*(phi(imo, 2)*phi(imo, 2) + phi(imo, 3)*phi(imo, 3) &
+                     + phi(imo, 4)*phi(imo, 4))*mol(m)%weight
                enddo
             enddo ! i = 0, n-1
 

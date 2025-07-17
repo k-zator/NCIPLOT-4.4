@@ -65,8 +65,9 @@ module reader
       real*8, allocatable :: c(:, :)
       real*8 :: mult
       integer :: nelec
-      REAL*8,DIMENSION(3) :: xinit0,xmax0,xinc0,xcom0
-      REAL,DIMENSION(:,:,:),ALLOCATABLE :: cubedens
+      real*8,DIMENSION(3) :: xinit0,xmax0,xinc0,xcom0
+      real,DIMENSION(:,:,:),ALLOCATABLE :: cubedens
+      real(8), allocatable :: weight  ! Weight for density contribution
 
    end type molecule
    integer, parameter :: ifile_xyz = 1
@@ -101,6 +102,9 @@ contains
       case default
          call error('readfile', 'Not recognized molecular format', faterr)
       end select
+      
+      allocate(m%weight)
+      m%weight = 1.0d0 ! Initialize weight to 1.0
 
    end function readfile
 

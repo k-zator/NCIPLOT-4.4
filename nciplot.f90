@@ -290,6 +290,7 @@ end if                         ! isnotcube
    ! - INTERMOL_CUTOFF
    ! - DGRID
    ! - VERBOSE
+   ! - DENSWEIGHT
    ! - CLUSTERING
    ! - NCIENERGY
    ! - CG2FG
@@ -332,6 +333,37 @@ do while (.true.)
 
       case ("VERBOSE")
          isverbose = .true.
+
+      case ("DENSWEIGHT")
+         if (.not. all(m(:)%ifile == ifile_wfn)) then
+            call error('nciplot', 'DENSWEIGHT keyword only works with WFN files', warning)
+            cycle
+         endif
+         read(line, *, iostat=istat) (m(i)%weight, i = 1, nfiles)
+         if (istat /= 0) call error('nciplot', 'Error reading DENSWEIGHT values -&
+            format should be "DENSWEIGHT w1 w2 ... wn"', warning)
+
+      case ("RANGE")                  ! range integration
+         dointeg = .true.              ! integration is required as well to apply the s=dimcut cutoff
+         read (line, *) nranges ! number of ranges
+         if (nranges .le. 0) then
+            call error('nciplot', 'No ranges were given', faterr)
+         else
+            dorange = .true.
+            allocate (srhorange(nranges, 2), stat=istat)
+            if (istat /= 0) call error('nciplot', 'could not allocate memory for range intervals', faterr)
+            do i = 1, nranges
+               read (uin, *) srhorange(i, :)
+               do j = 1, 2
+                  if (abs(srhorange(i, j)) .lt. 1d-30) then
+                     srhorange(i, j) = srhorange(i, j) + 1d-30
+                  endif
+               enddo
+            enddo
+         endif
+
+      case ("INTEGRATE")              ! integration of NCI regions
+         dointeg = .true.              ! integrate
       end select
    enddo
    
@@ -343,18 +375,18 @@ do while (.true.)
       line = trim(adjustl(line))
       oline = line
       call upper(line)
-      if (line(1:1) == "#") cycle ! skip comments
-      if (len(trim(line)) < 1) cycle ! skip blank lines
+      if (line(1:1) == "#") cycle     ! skip comments
+      if (len(trim(line)) < 1) cycle  ! skip blank lines
       idx = index(line, ' ')
       word = line(1:idx - 1)
       line = line(idx:)
       oline = oline(idx:)
       select case (trim(word))
 
-      case ("RTHRES")       ! extra box limits
+      case ("RTHRES")                 ! extra box limits
          read (line, *) rthres
          rthres = max(rthres, 1d-3)
-         rthres = rthres/bohrtoa ! change to bohr
+         rthres = rthres/bohrtoa      ! change to bohr
 
       case ("LIGAND")
          ligand = .true.              ! ligand option
@@ -364,20 +396,23 @@ do while (.true.)
          rthres = rthres/bohrtoa      ! change to bohr
 
       case ("INTERMOLECULAR")
-         inter = .true.              ! intermolecular option
+         inter = .true.               ! intermolecular option
+
+      case ("INTERMOL_CUTOFF")        ! cutoff for intermolecularity definition
+         read (line, *) rhoparam
 
       case ("RADIUS")
          autor = .false.
-         read (line, *) x, rdum      ! center of the box
+         read (line, *) x, rdum       ! center of the box
          rdum = max(rdum, 1d-3)
-         xinit = (x - rdum)/bohrtoa  ! box limits
+         xinit = (x - rdum)/bohrtoa   ! box limits
          xmax = (x + rdum)/bohrtoa
 
-      case ("CUBE_PARAM")         ! defining cube limits from coordinates in angstroms. Example:
-         autor = .false.    !CUBE x0,y0,z0,x1,y1,z1 format
+      case ("CUBE_PARAM")             ! defining cube limits from coordinates in angstroms. Example:
+         autor = .false.              ! x0, y0, z0, xn, xn, xn format
          read (line, *) xinit, xmax
 
-      case ("ATCUBE")          ! defining cube limits from atoms. Example:
+      case ("ATCUBE")                 ! defining cube limits from atoms. Example:
          autor = .false.       !ATCUBE
          xinit = 1d40          !ifile atom1,atom2,...,atomn
          xmax = -1d40          !END
@@ -425,7 +460,7 @@ do while (.true.)
             nstepat(igroup, :) = abs(ceiling((xmax - xinit)/xinc))
          end do
 
-      case ("FRAGMENT")          !defining fragments. Example:
+      case ("FRAGMENT")               ! defining fragments. Example:
          if (autofrag) then      !FRAGMENT
             nfrag = 0            !ifile atom1, atom2,...,atomn
             do ifile = 1, nfiles !END
@@ -462,13 +497,13 @@ do while (.true.)
             end if
          end do
 
-      case ("INCREMENTS")   ! grid increments
+      case ("INCREMENTS")             ! grid increments
          read (line, *) xinc
          xinc = max(xinc, 1d-4)
-         xinc = xinc/bohrtoa ! transforming to angstrom to bohr
+         xinc = xinc/bohrtoa      ! transforming to angstrom to bohr
 
-      case ("FINE")          ! FINE defaults
-         xinc = 0.05d0/bohrtoa   ! grid step
+      case ("FINE")                   ! FINE defaults
+         xinc = 0.05d0/bohrtoa    ! grid step
          if (allocated(fginc)) then
             deallocate (fginc)
          end if
@@ -476,7 +511,7 @@ do while (.true.)
          allocate (fginc(ng))
          fginc = (/12, 8, 4, 1/)
 
-      case ("ULTRAFINE")          ! ULTRAFINE defaults
+      case ("ULTRAFINE")              ! ULTRAFINE defaults
          xinc = 0.025d0/bohrtoa   ! grid step
          if (allocated(fginc)) then
             deallocate (fginc)
@@ -485,58 +520,31 @@ do while (.true.)
          allocate (fginc(ng))
          fginc = (/24, 16, 8, 1/)
 
-      case ("COARSE")          ! COARSE defaults
-         xinc = 0.15d0/bohrtoa   ! grid step
+      case ("COARSE")                 ! COARSE defaults
+         xinc = 0.15d0/bohrtoa    ! grid step
          if (allocated(fginc)) then
             deallocate (fginc)
          end if
          allocate (fginc(4))
          fginc = (/8, 4, 2, 1/)
          if (.not. inter) then
-            rthres = 0.5d0/bohrtoa     ! box limits around the molecule
+            rthres = 0.5d0/bohrtoa ! box limits around the molecule
          end if
 
-      case ("INTERMOL_CUTOFF")          ! cutoff for intermolecularity definition
-         read (line, *) rhoparam
-
-      case ("DGRID")            ! using grids for promolecular densities
+      case ("DGRID")                  ! using grids for promolecular densities
          do i = 1, nfiles
             if (m(i)%ifile == ifile_xyz) m(i)%ifile = ifile_grd
          end do
 
-      case ("CG2FG") ! coarse grid to fine grid multi-level
+      case ("CG2FG")                  ! coarse grid to fine grid multi-level
          read (line, *) ng ! number of multi-level grids
          if (allocated(fginc)) then
             deallocate (fginc)
          end if
          allocate (fginc(ng)) ! factors of grid increments. Example:
          read (line(:), *) ng, fginc ! CG2FG 4 8 4 2 1
-
-      case ("RANGE")  ! range integration
-         dointeg = .true.              ! integration is required as well to apply the s=dimcut cutoff
-         read (line, *) nranges ! number of ranges
-         if (nranges .le. 0) then
-            call error('nciplot', 'No ranges were given', faterr)
-         else
-            dorange = .true.
-            allocate (srhorange(nranges, 2), stat=istat)
-            if (istat /= 0) call error('nciplot', 'could not allocate memory for range intervals', faterr)
-            do i = 1, nranges
-               read (uin, *) srhorange(i, :)
-               do j = 1, 2
-                  if (abs(srhorange(i, j)) .lt. 1d-30) then
-                     srhorange(i, j) = srhorange(i, j) + 1d-30
-                  endif
-               enddo
-            enddo
-         endif
-      case ("INTEGRATE")  ! integration of NCI regions
-         dointeg = .true.              ! integrate
-
-      end select 
+      end select  
 end do
-    ! all the previous options are not compatible with cube file inputs
-    ! following are
 
 13 continue
 
@@ -563,10 +571,6 @@ end do
       nstep = abs(ceiling((xmax - xinit)/xinc)) !number of grid steps case not cube
    end if
 
-   !nstep = abs(ceiling(xmax - xinit)/(xinc)) !number of grid steps
-   !nstep = x
-   !write(*,*) nstep
-   ! Arregle los valores de las dimensiones del cubo, ceiling lo tiraba siempre hacia arriba.
    !===============================================================================!
    ! Information for user and output files. Default logical units first.
    !===============================================================================!
@@ -611,25 +615,6 @@ end do
    endif
 
    !===============================================================================!
-   ! Write output files.
-   !===============================================================================!
-   if (isverbose) write (uout, 122)
-   if (noutput == 1 .or. noutput == 3) then
-      if (isverbose) write (uout, 123) trim(oname)//".dat"
-   end if
-
-   if (noutput >= 2) then
-      if (isverbose) write (uout, 124) trim(oname)//"-grad.cube", &
-         trim(oname)//"-dens.cube", &
-         trim(oname)//".vmd"
-   end if
-   if (lugc > 0) call write_cube_header(lugc, 'grad_cube', '3d plot, reduced density gradient')
-   if (ludc > 0) call write_cube_header(ludc, 'dens_cube', '3d plot, density')
-   ! if (lurc > 0) call write_cube_header(lurc, 'rmbox_cube', '3d plot, boolean integration box')
-   ! if (ludc1 > 0) call write_cube_header(ludc1, 'dens_cube', '3d plot, density monomer 1')
-   ! if (ludc2 > 0) call write_cube_header(ludc2, 'dens_cube', '3d plot, density monomer 2')
-
-   !===============================================================================!
    ! Start run, using multi-level grids.
    !===============================================================================!
    if (isnotcube) then
@@ -643,8 +628,9 @@ end do
 
    if (isverbose) then
       write (uout, *)    ! punch info
-      write (uout, 121) ind_g, xinit, xmax, xinc, nstep
    end if
+   write (uout, 121) ind_g, xinit, xmax, xinc, nstep
+
    !===============================================================================!
    ! Allocate memory for density and gradient.
    !===============================================================================!
@@ -878,6 +864,25 @@ end do
    if (ind_g .le. ng) then
       goto 12 ! shameful goto to end multilevel grids.
    end if
+
+   !===============================================================================!
+   ! Write output files.
+   !===============================================================================!
+   if (isverbose) write (uout, 122)
+   if (noutput == 1 .or. noutput == 3) then
+      if (isverbose) write (uout, 123) trim(oname)//".dat"
+   end if
+
+   if (noutput >= 2) then
+      if (isverbose) write (uout, 124) trim(oname)//"-grad.cube", &
+         trim(oname)//"-dens.cube", &
+         trim(oname)//".vmd"
+   end if
+   if (lugc > 0) call write_cube_header(lugc, 'grad_cube', '3d plot, reduced density gradient')
+   if (ludc > 0) call write_cube_header(ludc, 'dens_cube', '3d plot, density')
+   ! if (lurc > 0) call write_cube_header(lurc, 'rmbox_cube', '3d plot, boolean integration box')
+   ! if (ludc1 > 0) call write_cube_header(ludc1, 'dens_cube', '3d plot, density monomer 1')
+   ! if (ludc2 > 0) call write_cube_header(ludc2, 'dens_cube', '3d plot, density monomer 2')
 
    !===============================================================================!
    ! Output of .mesh and .sol files.
