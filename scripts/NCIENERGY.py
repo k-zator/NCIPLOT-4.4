@@ -58,8 +58,12 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
         print("  0.02  0.20")
 
     # obtain the contents of the nci_output file
-    with open("nci_output_xyz_monomer.txt") as f: #need to know the NAME of output!!!
-        contents = f.readlines()
+    try:
+        with open("nci_output.txt") as f: #need to know the NAME of output!!!
+            contents = f.readlines()
+    except FileNotFoundError:
+        print("Error: nci_output.txt not found. Please ensure that your NCIPLOT output file is named 'nci_output.txt'.")
+        sys.exit(1)
     print("----------------------------------------------------------------------")
     print("                             NCIENERGY                                ")
     print("----------------------------------------------------------------------")

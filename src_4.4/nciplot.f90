@@ -222,11 +222,8 @@ program nciplot
    endif
    if (isnotcube) then
       xinc = 0.1d0/bohrtoa          ! grid step
-   if (any(m(:)%ifile == ifile_wfn) .or. any(m(:)%ifile == ifile_wfx)) then
-      rhocut = 0.05d0               ! Density isosurface
-   else
-      rhocut = 0.07d0               ! Density isosurface
    end if
+   rhocut = 0.2qd0                  ! Density isosurface
    rhoparam = 0.85d0                ! cutoff for intermolecularity
    noutput = 3                      ! number of outputs
    udat0 = 1
