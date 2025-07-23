@@ -1197,6 +1197,10 @@ end if ! isnotcube
                cgrad(i, j, k) = abs(cgrad(i, j, k))
                dimgrad = cgrad(i, j, k)
                rho = crho(i, j, k)/100d0
+               ! Add bounds check for rmbox_coarse access
+               if (i >= ubound(rmbox_coarse,1) .or. &
+                   j >= ubound(rmbox_coarse,2) .or. &
+                   k >= ubound(rmbox_coarse,3)) cycle
                ! write the dat file
                if (ludat > 0 .and. .not. intra .and. (abs(rho) < rhocut) .and. (dimgrad < dimcut) .and. &
                    (abs(rho) > 1d-30) .and. .not. (rmbox_coarse(i, j, k) )) then
