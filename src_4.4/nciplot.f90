@@ -218,54 +218,54 @@ program nciplot
    dimcut = 1.0d0  ! RDG cutoff
    isordg = 0.5d0
    if (.not.isnotcube) then
-      rhocut=0.2d0                  ! density cutoff for printing, in cube case
+      rhocut=0.2d0                     ! density cutoff for printing, in cube case
    endif
    if (isnotcube) then
-      xinc = 0.1d0/bohrtoa          ! grid step
-   rhocut = 0.2d0                   ! Density isosurface
-   rhoparam = 0.85d0                ! cutoff for intermolecularity
-   noutput = 3                      ! number of outputs
-   udat0 = 1
-   autor = .true.                   ! build the cube automatically
-   ligand = .false.                 ! ligand keyword
-   inter = .false.                  ! intermolecular keyword
-   rthres = 0.75d0/bohrtoa          ! box limits around the molecule
-   dointeg = .false.                ! integrating properties or not
-   doclustering = .false.           ! clustering python script NCICLUSTER
-   ncienergy = .false.              ! energy calculation with python script NCIENERGY
-   isverbose = .false.              ! option to print complete output 
-   dorange = .false.                ! do not integrate range
-   firstgrid = .true.               ! flag for the first adaptive grid run
-   if (.not. allocated(fginc)) then ! default setting CG2FG 3 4 2 1
-      ng = 4
-      allocate (fginc(ng))
-      fginc = (/8, 4, 2, 1/)
-   end if
+      xinc = 0.1d0/bohrtoa             ! grid step
+      rhocut = 0.2d0                   ! Density isosurface
+      rhoparam = 0.85d0                ! cutoff for intermolecularity
+      noutput = 3                      ! number of outputs
+      udat0 = 1
+      autor = .true.                   ! build the cube automatically
+      ligand = .false.                 ! ligand keyword
+      inter = .false.                  ! intermolecular keyword
+      rthres = 0.75d0/bohrtoa          ! box limits around the molecule
+      dointeg = .false.                ! integrating properties or not
+      doclustering = .false.           ! clustering python script NCICLUSTER
+      ncienergy = .false.              ! energy calculation with python script NCIENERGY
+      isverbose = .false.              ! option to print complete output 
+      dorange = .false.                ! do not integrate range
+      firstgrid = .true.               ! flag for the first adaptive grid run
+      if (.not. allocated(fginc)) then ! default setting CG2FG 3 4 2 1
+         ng = 4
+         allocate (fginc(ng))
+         fginc = (/8, 4, 2, 1/)
+      end if
    !===============================================================================!
    ! Estimating box around the molecule using xinit and xmax for the main system.
    !===============================================================================!
-   xinit = m(1)%x(:, 1)
-   xmax = m(1)%x(:, 1)
-   do i = 1, nfiles
-      do j = 1, m(i)%n
-         xinit = min(xinit, m(i)%x(:, j))
-         xmax = max(xmax, m(i)%x(:, j))
+      xinit = m(1)%x(:, 1)
+      xmax = m(1)%x(:, 1)
+      do i = 1, nfiles
+         do j = 1, m(i)%n
+            xinit = min(xinit, m(i)%x(:, j))
+            xmax = max(xmax, m(i)%x(:, j))
+         enddo
       enddo
-   enddo
-   ntotal = 0
-   do i = 1, nfiles
-      ntotal = ntotal + m(i)%n ! compute the total number of atoms
-   enddo
- else
-    xinc = m(1)%xinc0          ! if cube file, then only one molecule (file), and increment is contained in molecule type
-    xinit= m(1)%xinit0         ! same for initial point in grid
-    xmax= m(1)%xmax0           ! same for last
-    xcom = m(1)%xcom0          ! Number of points given by the input cube
-    noutput = 3
-   do i = 1, nfiles
-      ntotal = ntotal + m(i)%n ! compute the total number of atoms
-   enddo
-end if                         ! isnotcube
+      ntotal = 0
+      do i = 1, nfiles
+         ntotal = ntotal + m(i)%n ! compute the total number of atoms
+      enddo
+   else
+      xinc = m(1)%xinc0           ! if cube file, then only one molecule (file), and increment is contained in molecule type
+      xinit= m(1)%xinit0          ! same for initial point in grid
+      xmax= m(1)%xmax0            ! same for last
+      xcom = m(1)%xcom0           ! Number of points given by the input cube
+      noutput = 3
+      do i = 1, nfiles
+         ntotal = ntotal + m(i)%n ! compute the total number of atoms
+      enddo
+   end if                         ! isnotcube
    !===============================================================================!
    ! Read optional keywords.
    ! Accepted keywords in this version:
