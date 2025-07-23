@@ -218,12 +218,11 @@ program nciplot
    dimcut = 1.0d0  ! RDG cutoff
    isordg = 0.5d0
    if (.not.isnotcube) then
-      rhocut=0.05d0                 ! density cutoff for printing, in cube case
+      rhocut=0.2d0                  ! density cutoff for printing, in cube case
    endif
    if (isnotcube) then
       xinc = 0.1d0/bohrtoa          ! grid step
-   end if
-   rhocut = 0.2qd0                  ! Density isosurface
+   rhocut = 0.2d0                   ! Density isosurface
    rhoparam = 0.85d0                ! cutoff for intermolecularity
    noutput = 3                      ! number of outputs
    udat0 = 1
@@ -408,6 +407,7 @@ do while (.true.)
       case ("CUBE_PARAM")             ! defining cube limits from coordinates in angstroms. Example:
          autor = .false.              ! x0, y0, z0, xn, xn, xn format
          read (line, *) xinit, xmax
+         nstep = abs(ceiling((xmax - xinit)/xinc))
 
       case ("ATCUBE")                 ! defining cube limits from atoms. Example:
          autor = .false.       !ATCUBE
