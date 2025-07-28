@@ -222,8 +222,12 @@ program nciplot
    endif
    if (isnotcube) then
       xinc = 0.1d0/bohrtoa             ! grid step
-      rhocut = 0.2d0                   ! Density isosurface
-      rhoparam = 0.85d0                ! cutoff for intermolecularity
+      rhocut = 0.2d0                   ! density isosurface
+      if (ispromol) then
+         rhoparam = 0.85d0             ! cutoff for intermolecularity promol
+      else
+         rhoparam = 0.75d0             ! cutoff for intermolecularity wfn
+      end if
       noutput = 3                      ! number of outputs
       udat0 = 1
       autor = .true.                   ! build the cube automatically
