@@ -87,9 +87,9 @@ contains
       d2(:,:) = 0d0
 
       ! Parallelization is not working.  
-      !!$omp parallel do private (ip,jp,kp,hess,tp,gg,chi,phi,maxc,ldopri,dx,dy,dz,d2,&
-      !!$omp nn,ipri,iat,al,ex,x0,l,xl,xl2,grad2,rho53,ebose,df,hvecs,wk1,wk2,&
-      !!$omp istat,rhoaux) schedule(static)
+      !$omp parallel do private (ip,jp,kp,hess,tp,gg,chi,phi,maxc,ldopri,dx,dy,dz,d2,&
+      !$omp nn,ipri,iat,al,ex,x0,l,xl,xl2,grad2,hvecs,wk1,wk2,i,j,k,m,imo,ityp,ipria,ix,heigs,&
+      !$omp istat,rhoaux) schedule(static)
 
       do j = 0, n(2) - 1
          jp = j + 1
@@ -242,16 +242,14 @@ contains
                hess(ip, 3, 2) = hess(ip, 2, 3)
                call rs(3, 3, hess(ip, :, :), heigs, 0, hvecs, wk1, wk2, istat)
                if (istat /= 0) call error('calcprops', 'Error diagonalizing hessian.', faterr)
-       !        !$omp critical (writeshared)
                rho(ip, jp, kp) = sign(rhoaux(ip), heigs(2))*100d0
                grad(ip, jp, kp) = sqrt(grad2)/(const*rhoaux(ip)**fothirds)
                cheig(ip, jp, kp) = heigs(2)
                !write(*,*)  rhoaux(ip)
-      !         !$omp end critical (writeshared)
             enddo
          enddo ! k = 0, n(3)-1
       enddo ! j = 0, n(2)-1
-     ! !$omp end parallel do
+     !$omp end parallel do
 
       deallocate (dx, dy, dz, d2, hess, tp, gg)
 
@@ -290,38 +288,35 @@ contains
       nmcent = 0
       nmcent = max(nmcent, mol(m)%n)
 
-      allocate (dx(n(1), nmcent), dy(n(1), nmcent), dz(n(1), nmcent), d2(n(1), nmcent), stat=istat)
-      if (istat /= 0) call error('calcprops', 'error allocating distance matrix', faterr)
-      allocate (hess(n(1), 3, 3), stat=istat)
-      if (istat /= 0) call error('calcprops', 'error allocating hessian', faterr)
-      allocate (tp(n(1)), rhoaux(n(1)), stat=istat)
-      if (istat /= 0) call error('calcprops', 'error allocating rhoaux', faterr)
-      allocate (gg(n(1), 3), stat=istat)
-      if (istat /= 0) call error('calcprops', 'error allocating gg', faterr)
-
-      hess = 0d0
-      rhoaux = 0d0
-      tp = 0d0
-      gg = 0d0
-      dx(:,:) = 0d0
-      dy(:,:) = 0d0
-      dz(:,:) = 0d0
-      d2(:,:) = 0d0
-
-      ! run over y and z
-     ! !$omp parallel do private (ip,jp,kp,hess,tp,gg,chi,phi,maxc,ldopri,dx,dy,dz,d2,&
-     ! !$omp nn,ipri,iat,al,ex,x0,l,xl,xl2,grad2,rho53,ebose,df,hvecs,wk1,wk2,&
-     ! !$omp istat,rhoaux) schedule(dynamic)
+     ! parallisation of intermolecular
+     !$omp parallel do private (ip,jp,kp,hess,tp,gg,chi,phi,maxc,ldopri,dx,dy,dz,d2,&
+     !$omp nn,ipri,iat,al,ex,x0,l,xl,xl2,grad2,hvecs,wk1,wk2,i,j,k,imo,ityp,ipria,ix,heigs,&
+     !$omp istat,rhoaux) firstprivate(nmcent) schedule(static)
 
       do j = 0, n(2) - 1
          jp = j + 1
          do k = 0, n(3) - 1
             kp = k + 1
+            
+            ! allocate thread-private arrays
+            allocate (dx(n(1), nmcent), dy(n(1), nmcent), dz(n(1), nmcent), d2(n(1), nmcent), stat=istat)
+            if (istat /= 0) call error('calcprops', 'error allocating distance matrix', faterr)
+            allocate (hess(n(1), 3, 3), stat=istat)
+            if (istat /= 0) call error('calcprops', 'error allocating hessian', faterr)
+            allocate (tp(n(1)), rhoaux(n(1)), stat=istat)
+            if (istat /= 0) call error('calcprops', 'error allocating rhoaux', faterr)
+            allocate (gg(n(1), 3), stat=istat)
+            if (istat /= 0) call error('calcprops', 'error allocating gg', faterr)
+            
             ! zero in-line hessian and tp
             hess = 0d0
             rhoaux = 0d0
             tp = 0d0
             gg = 0d0
+            dx(:,:) = 0d0
+            dy(:,:) = 0d0
+            dz(:,:) = 0d0
+            d2(:,:) = 0d0
 
             ! allocate primitive evaluation array
             allocate (chi(mol(m)%npri, 10), phi(mol(m)%nmo, 10))
@@ -459,18 +454,16 @@ contains
                hess(ip, 3, 1) = hess(ip, 1, 3)
                hess(ip, 3, 2) = hess(ip, 2, 3)
                call rs(3, 3, hess(ip, :, :), heigs, 0, hvecs, wk1, wk2, istat)
-               !if (istat /= 0) call error('calcprops', 'Error diagonalizing hessian.', faterr)
-      !         !$omp critical (writeshared)
                rho(ip, jp, kp) = rhoaux(ip)
                grad(ip, jp, kp) = sqrt(grad2)/(const*rhoaux(ip)**fothirds)
                cheig(ip, jp, kp) = heigs(2)
-      !         !$omp end critical (writeshared)
             enddo
+            
+            ! deallocate thread-private arrays
+            deallocate (dx, dy, dz, d2, hess, tp, gg, rhoaux)
          enddo ! k = 0, n(3)-1
       enddo ! j = 0, n(2)-1
-    !  !$omp end parallel do
-
-      deallocate (dx, dy, dz, d2, hess, tp, gg)
+      !$omp end parallel do
 
    end subroutine calcprops_id_wfn
 

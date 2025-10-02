@@ -37,11 +37,12 @@ def calculate_energy_cluster(output, ispromol, mol1, mol2, filename):
                 E_vdw = -1064.0465*np.array(NCI_index_dict["Weak"][3]) - 5.8970227
             else:
                 E_polar = -np.array(27.424896*np.power(NCI_index_dict["Strong"][1], 0.333) + 2759.675*(NCI_index_dict["Strong"][4]))
+                print(f"Note, using polar: {E_polar}")
                 E_vdw = -np.array(-79.92235*np.power(NCI_index_dict["Weak"][3], 0.333) + 50.483402*np.power(NCI_index_dict["Weak"][0],0.5))
         
         else: #WFN
             E_polar = -np.array(3399.1965*NCI_index_dict["Strong"][2])
-            E_vdw = -np.array(3399.1965*NCI_index_dict["Weak"][2] + 115.258*np.power(NCI_index_dict["Weak"][5], 0.333) -811.5827*NCI_index_dict["Weak"][0]**2)
+            E_vdw = -np.array(-811.5827*NCI_index_dict["Weak"][0]**2 + 115.258*np.power(NCI_index_dict["Weak"][5], 0.333) + 3399.1965*NCI_index_dict["Weak"][2])
         return E_polar + E_vdw, E_polar, E_vdw
 
     no_clusters = [int(s.split()[5]) for s in output if " Number of critical points found:" in s][0]
@@ -50,7 +51,7 @@ def calculate_energy_cluster(output, ispromol, mol1, mol2, filename):
     # SIGMA HOLE CHECK 
     CPs = filename + "_CPs.xyz"
     CP_Atoms = find_CP_Atom_matches(CPs, mol1, mol2)
-    sigma_bonds = find_sigma_bond(mol1, mol2) # will be [] if None
+    sigma_bonds = find_sigma_bond(mol1, mol2)  # will be [] if None
     # now, are there any Atom Pairings that match? Those should be sigma_holes
     sigma_hole_mask = [0]*no_clusters
     for i in range(no_clusters):
@@ -67,7 +68,8 @@ def calculate_energy_cluster(output, ispromol, mol1, mol2, filename):
         cluster_idx += 35 # the integration section length per cluster
         polar_i += polar[0]
         nonpolar_i += vdw[0]
-        print(f" Note, cluster {i} contains a sigma hole. Energy is calculated with a dedicated sigma hole equation")
+        if sigma_hole_mask[i]:
+            print(f" Note, cluster {i} contains a sigma hole. Energy is calculated with a dedicated sigma hole equation")
         e_sum, e_polar, e_vdw = energy(NCI_index_dict, ispromol, sigma_hole=sigma_hole_mask[i])
         E_sum.append(e_sum)
         E_polar.append(e_polar)
