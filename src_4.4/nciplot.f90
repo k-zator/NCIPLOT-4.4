@@ -210,19 +210,21 @@ program nciplot
          end if
       end do
    end if
-    isnotcube = .not. (all(m(:)%ifile == ifile_cube))
+
+   isnotcube = .not. (all(m(:)%ifile == ifile_cube))
    ! This checks whether the calculation uses cube files
+
    !===============================================================================!
    ! Input files read and processed. Set defaults for running NCIPLOT now.
    !===============================================================================!
    dimcut = 1.0d0  ! RDG cutoff
    isordg = 0.5d0
    if (.not.isnotcube) then
-      rhocut=0.2d0                     ! density cutoff for printing, in cube case
+      rhocut=0.05d0                    ! density cutoff for printing, in cube case
    endif
    if (isnotcube) then
       xinc = 0.1d0/bohrtoa             ! grid step
-      rhocut = 0.2d0                   ! density isosurface
+      rhocut = 0.05d0                   ! density isosurface
       if (ispromol) then
          rhoparam = 0.85d0             ! cutoff for intermolecularity promol
       else
@@ -245,9 +247,10 @@ program nciplot
          allocate (fginc(ng))
          fginc = (/8, 4, 2, 1/)
       end if
-   !===============================================================================!
-   ! Estimating box around the molecule using xinit and xmax for the main system.
-   !===============================================================================!
+
+      !===============================================================================!
+      ! Estimating box around the molecule using xinit and xmax for the main system.
+      !===============================================================================!
       xinit = m(1)%x(:, 1)
       xmax = m(1)%x(:, 1)
       do i = 1, nfiles
@@ -397,6 +400,7 @@ do while (.true.)
 
       case ("INTERMOLECULAR")
          inter = .true.               ! intermolecular option
+         rhocut = 0.20d0   
 
       case ("INTERMOL_CUTOFF")        ! cutoff for intermolecularity definition
          read (line, *) rhoparam
@@ -545,7 +549,7 @@ do while (.true.)
          allocate (fginc(ng)) ! factors of grid increments. Example:
          read (line(:), *) ng, fginc ! CG2FG 4 8 4 2 1
       end select  
-end do
+   end do !isnotcube
 
 13 continue
 
@@ -555,8 +559,7 @@ end do
    if (.not. isnotcube) then
         autor=.false.
         nstep= abs(xcom) !dimensions given on principal cube
-   end if
-   ! if we have a cube file, parameters are already known
+   end if ! if we have a cube file, parameters are already known
 
    if (autor) then ! automatically build grid, it has not been done
       if (ligand) then ! ligand mode is enabled
@@ -602,10 +605,7 @@ end do
       luvmd = 11
       open (lugc, file=trim(oname)//"-grad.cube")    ! RDG cube file
       open (ludc, file=trim(oname)//"-dens.cube")    ! Density cube file
-      ! open (lurc, file=trim(oname)//"-rmbox.cube")   ! Boolean box cube file
       open (luvmd, file=trim(oname)//".vmd")         ! VMD script
-      ! open (ludc1, file=trim(oname)//"-grad1.cube")   ! Density cube file for monomer1
-      ! open (ludc2, file=trim(oname)//"-grad2.cube")   ! Density cube file for monomer2 - conditional for clustering only
    endif
 
    if (noutput == 1 .or. noutput == 3) then
@@ -619,139 +619,70 @@ end do
    ! Start run, using multi-level grids.
    !===============================================================================!
    if (isnotcube) then
-   ind_g = 1  ! index of the multi-level grids, starts at 1 always
-   xinc_init = xinc ! initial coarse grid
-   allocate (rho_n(1:nfiles))
+      ind_g = 1  ! index of the multi-level grids, starts at 1 always
+      xinc_init = xinc ! initial coarse grid
+      allocate (rho_n(1:nfiles))
 
-12 continue    ! set grids from coarse to fine
-   xinc = fginc(ind_g)*xinc_init
-   nstep = ceiling((xmax - xinit)/xinc)
+      12 continue    ! set grids from coarse to fine
+      xinc = fginc(ind_g)*xinc_init
+      nstep = ceiling((xmax - xinit)/xinc)
 
-   if (isverbose) then
-      write (uout, *)    ! punch info
-   end if
-   write (uout, 121) ind_g, xinit, xmax, xinc, nstep
+      if (isverbose) then
+         write (uout, *)    ! punch info
+      end if
+      write (uout, 121) ind_g, xinit, xmax, xinc, nstep
 
    !===============================================================================!
    ! Allocate memory for density and gradient.
    !===============================================================================!
-   if (ind_g .eq. 1) then
-      allocate (crho(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
-      if (istat /= 0) call error('nciplot', 'could not allocate memory for density cube', faterr)
-      allocate (crho_n(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1, 1:nfiles), stat=istat)
-      if (istat /= 0) call error('nciplot', 'could not allocate memory for density cube', faterr)
-      allocate (cheig(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
-      if (istat /= 0) call error('nciplot', 'could not allocate memory for density cube', faterr)
-      allocate (cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
-      if (istat /= 0) call error('nciplot', 'could not allocate memory for grad', faterr)
-      xinc_coarse = xinc ! initialize just in case
-      nstep_coarse = nstep ! initialize just in case
-   end if
+      if (ind_g .eq. 1) then
+         allocate (crho(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         if (istat /= 0) call error('nciplot', 'could not allocate memory for density cube', faterr)
+         allocate (crho_n(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1, 1:nfiles), stat=istat)
+         if (istat /= 0) call error('nciplot', 'could not allocate memory for density cube', faterr)
+         allocate (cheig(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         if (istat /= 0) call error('nciplot', 'could not allocate memory for density cube', faterr)
+         allocate (cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         if (istat /= 0) call error('nciplot', 'could not allocate memory for grad', faterr)
+         xinc_coarse = xinc ! initialize just in case
+         nstep_coarse = nstep ! initialize just in case
+      end if
    !===============================================================================!
    ! Allocate memory for coarse grid.
    !===============================================================================!
-   if (ind_g .gt. 1) then
-      if (allocated(tmp_crho)) deallocate (tmp_crho)
-      allocate (tmp_crho(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
-      call move_alloc(tmp_crho, crho)
-      if (allocated(tmp_crho_n)) deallocate (tmp_crho_n)
-      allocate (tmp_crho_n(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1, 1:nfiles), stat=istat)
-      call move_alloc(tmp_crho_n, crho_n)
-      if (allocated(tmp_cheigs)) deallocate (tmp_cheigs)
-      allocate (tmp_cheigs(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
-      call move_alloc(tmp_cheigs, cheig)
-      if (allocated(tmp_cgrad)) deallocate (tmp_cgrad)
-      allocate (tmp_cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
-      call move_alloc(tmp_cgrad, cgrad)
-   end if
+      if (ind_g .gt. 1) then
+         if (allocated(tmp_crho)) deallocate (tmp_crho)
+         allocate (tmp_crho(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         call move_alloc(tmp_crho, crho)
+         if (allocated(tmp_crho_n)) deallocate (tmp_crho_n)
+         allocate (tmp_crho_n(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1, 1:nfiles), stat=istat)
+         call move_alloc(tmp_crho_n, crho_n)
+         if (allocated(tmp_cheigs)) deallocate (tmp_cheigs)
+         allocate (tmp_cheigs(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         call move_alloc(tmp_cheigs, cheig)
+         if (allocated(tmp_cgrad)) deallocate (tmp_cgrad)
+         allocate (tmp_cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         call move_alloc(tmp_cgrad, cgrad)
+      end if
 
    !===============================================================================!
    ! Sanity check.
    !===============================================================================!
-   if (.not. firstgrid) then
-      do i = 1, 3
-         if (ubound(rmbox_coarse, i) .ne. (nstep_coarse(i) - 2)) then
-            write (*, *) ubound(rmbox_coarse, i)
-            write (*, *) nstep_coarse(i) - 2
-            call error('nciplot', 'allocations did not work for adaptive grids', faterr)
-         end if
-      end do
-   end if
+      if (.not. firstgrid) then
+         do i = 1, 3
+            if (ubound(rmbox_coarse, i) .ne. (nstep_coarse(i) - 2)) then
+               write (*, *) ubound(rmbox_coarse, i)
+               write (*, *) nstep_coarse(i) - 2
+               call error('nciplot', 'allocations did not work for adaptive grids', faterr)
+            end if
+         end do
+      end if
 
    !===============================================================================!
    ! Run adaptive grids.
    !===============================================================================!
-   if (ispromol) then    ! promolecular densities
-      call system_clock(count=c1)
-      !$omp parallel do private (x,rho,grad,hess,heigs,hvecs,wk1,wk2,istat,grad2,&
-      !$omp dimgrad,intra,rhom,flag,indx,i0,j0,k0) schedule(dynamic)
-      do k = 0, nstep(3) - 1
-         do j = 0, nstep(2) - 1
-            do i = 0, nstep(1) - 1
-               x = xinit + (/i, j, k/)*xinc
-               if (.not. firstgrid) then
-                  flag = .false.
-                  do i0 = max(0, i - 1), i
-                     do j0 = max(0, j - 1), j
-                        do k0 = max(0, k - 1), k
-                           ! For each x, look for i, j, k indices in the previous coarser grid
-                           indx = floor(((/i0, j0, k0/)*xinc)/xinc_coarse)
-                           indx = (/min(nstep_coarse(1) - 2, indx(1)), min(nstep_coarse(2) - 2, indx(2)), &
-                                    min(nstep_coarse(3) - 2, indx(3))/)
-                           if ((.not. flag) .and. (.not. (rmbox_coarse(indx(1), indx(2), indx(3))))) then
-                              flag = .true.
-                              goto 20
-                           end if
-                        end do
-                     end do
-                  end do
-
-                  if (.not. flag) then
-                     crho(i, j, k) = 100d0
-                     cgrad(i, j, k) = 100d0
-                     cheig(i, j, k) = 0d0
-                     cycle
-                  end if
-20                continue
-
-               end if
-
-               ! calculate properties at x
-               rho_n = 0d0
-               call calcprops_pro(x, m, nfiles, rho, rho_n, rhom(1:nfrag), nfrag, autofrag, &
-                                  grad, hess, deltag)
-               call rs(3, 3, hess, heigs, 0, hvecs, wk1, wk2, istat)
-               rho = max(rho, 1d-30)
-               grad2 = dot_product(grad, grad)
-               dimgrad = sqrt(grad2)/(const*rho**(4.D0/3.D0))
-               intra = inter .and. (any(rhom(1:nfrag) >= sum(rhom(1:nfrag))*rhoparam))
-               if (intra) dimgrad = -dimgrad !checks for interatomic, intra is true iff inter and condition hold
-               !$omp critical (cubewrite)
-               ! write to cube file, dont take into account rho values to low
-               if (rho /= 1d-30) then
-                  crho(i, j, k) = sign(rho, heigs(2))*100.D0
-                  cgrad(i, j, k) = dimgrad
-               else
-                  crho(i, j, k) = 100d0
-                  cgrad(i, j, k) = 100d0
-               end if
-
-               do molid = 1, nfiles
-                  crho_n(i, j, k, molid) = rhom(molid)
-               enddo
-               !$omp end critical (cubewrite)
-
-            end do !i=0,nstep(1)-1
-         end do ! j=0,nstep(2)-1
-      end do  ! k=0,nstep(3)-1
-      !$omp end parallel do
-      call system_clock(count=c2)
-      if (isverbose) write (*, "(A, F6.2, A)") ' Time for computing density & RDG = ', real(dble(c2 - c1)/dble(cr), kind=8), ' secs'
-
-   else  ! wavefunction densities
-      if (.not. inter) then
+      if (ispromol) then    ! promolecular densities
          call system_clock(count=c1)
-         call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig)
          !$omp parallel do private (x,rho,grad,hess,heigs,hvecs,wk1,wk2,istat,grad2,&
          !$omp dimgrad,intra,rhom,flag,indx,i0,j0,k0) schedule(dynamic)
          do k = 0, nstep(3) - 1
@@ -759,50 +690,6 @@ end do
                do i = 0, nstep(1) - 1
                   x = xinit + (/i, j, k/)*xinc
                   if (.not. firstgrid) then
-                     ! check if x is used, not removed
-                     flag = .false.
-                     do i0 = max(0, i - 1), i
-                        do j0 = max(0, j - 1), j
-                           do k0 = max(0, k - 1), k
-                              ! For each x, look for i, j, k indexes in the previous coarser grid
-                              indx = floor(((/i0, j0, k0/)*xinc)/xinc_coarse)
-                              indx = (/min(nstep_coarse(1) - 2, indx(1)), min(nstep_coarse(2) - 2, indx(2)), &
-                                       min(nstep_coarse(3) - 2, indx(3))/)
-                              if ((.not. flag) .and. (.not. (rmbox_coarse(indx(1), indx(2), indx(3))))) then
-                                 flag = .true.
-                                 goto 21
-                              end if
-                           end do
-                        end do
-                     end do
-
-                     if (.not. flag) then
-                        crho(i, j, k) = 100d0
-                        cgrad(i, j, k) = 100d0
-                        cheig(i, j, k) = 0d0
-                        cycle
-                     end if
-21                   continue
-
-                  end if
-               end do
-            end do
-         end do
-         call system_clock(count=c2)
-         write (*, "(A, F6.2, A)") ' Time for computing density & RDG = ', real(dble(c2 - c1)/dble(cr), kind=8), ' secs'
-      else !very experimental wfn intermolecular
-         call system_clock(count=c1)
-         do molid = 1, nfiles
-            call calcprops_id_wfn(xinit, xinc, nstep, m, nfiles, molid, crho, cgrad, cheig)
-            crho_n(:, :, :, molid) = crho(:, :, :)
-         end do
-         call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig)
-         do k = 0, nstep(3) - 1
-            do j = 0, nstep(2) - 1
-               do i = 0, nstep(1) - 1
-                  x = xinit + (/i, j, k/)*xinc
-                  if (.not. firstgrid) then
-                     ! check if x is used, not removed
                      flag = .false.
                      do i0 = max(0, i - 1), i
                         do j0 = max(0, j - 1), j
@@ -813,165 +700,262 @@ end do
                                        min(nstep_coarse(3) - 2, indx(3))/)
                               if ((.not. flag) .and. (.not. (rmbox_coarse(indx(1), indx(2), indx(3))))) then
                                  flag = .true.
-                                 goto 22
+                                 goto 20
                               end if
                            end do
                         end do
                      end do
-                     rho = crho(i,j,k)
-                     intra = inter .and. (any(crho_n(i, j, k, 1:nfrag) >= crho(i, j, k)*rhoparam))
-                     if (intra) then !checks for interatomic
-                        cgrad(i, j, k) = -cgrad(i, j, k)
-                     end if
+
                      if (.not. flag) then
                         crho(i, j, k) = 100d0
                         cgrad(i, j, k) = 100d0
                         cheig(i, j, k) = 0d0
                         cycle
                      end if
-22                   continue
+   20                continue
 
                   end if
+
+                  ! calculate properties at x
+                  rho_n = 0d0
+                  call calcprops_pro(x, m, nfiles, rho, rho_n, rhom(1:nfrag), nfrag, autofrag, &
+                                    grad, hess, deltag)
+                  call rs(3, 3, hess, heigs, 0, hvecs, wk1, wk2, istat)
+                  rho = max(rho, 1d-30)
+                  grad2 = dot_product(grad, grad)
+                  dimgrad = sqrt(grad2)/(const*rho**(4.D0/3.D0))
+                  intra = inter .and. (any(rhom(1:nfrag) >= sum(rhom(1:nfrag))*rhoparam))
+                  if (intra) dimgrad = -dimgrad !checks for interatomic, intra is true iff inter and condition hold
+                  !$omp critical (cubewrite)
+                  ! write to cube file, dont take into account rho values to low
+                  if (rho /= 1d-30) then
+                     crho(i, j, k) = sign(rho, heigs(2))*100.D0
+                     cgrad(i, j, k) = dimgrad
+                  else
+                     crho(i, j, k) = 100d0
+                     cgrad(i, j, k) = 100d0
+                  end if
+
+                  do molid = 1, nfiles
+                     crho_n(i, j, k, molid) = rhom(molid)
+                  enddo
+                  !$omp end critical (cubewrite)
+
+               end do !i=0,nstep(1)-1
+            end do ! j=0,nstep(2)-1
+         end do  ! k=0,nstep(3)-1
+         !$omp end parallel do
+         call system_clock(count=c2)
+         if (isverbose) write (*, "(A, F6.2, A)") ' Time for computing density & RDG = ', &
+            real(dble(c2 - c1)/dble(cr), kind=8), ' secs'
+
+      else  ! wavefunction densities
+         if (.not. inter) then
+            call system_clock(count=c1)
+            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig)
+            !$omp parallel do private (x,rho,grad,hess,heigs,hvecs,wk1,wk2,istat,grad2,&
+            !$omp dimgrad,intra,rhom,flag,indx,i0,j0,k0) schedule(dynamic)
+            do k = 0, nstep(3) - 1
+               do j = 0, nstep(2) - 1
+                  do i = 0, nstep(1) - 1
+                     x = xinit + (/i, j, k/)*xinc
+                     if (.not. firstgrid) then
+                        ! check if x is used, not removed
+                        flag = .false.
+                        do i0 = max(0, i - 1), i
+                           do j0 = max(0, j - 1), j
+                              do k0 = max(0, k - 1), k
+                                 ! For each x, look for i, j, k indexes in the previous coarser grid
+                                 indx = floor(((/i0, j0, k0/)*xinc)/xinc_coarse)
+                                 indx = (/min(nstep_coarse(1) - 2, indx(1)), min(nstep_coarse(2) - 2, indx(2)), &
+                                          min(nstep_coarse(3) - 2, indx(3))/)
+                                 if ((.not. flag) .and. (.not. (rmbox_coarse(indx(1), indx(2), indx(3))))) then
+                                    flag = .true.
+                                    goto 21
+                                 end if
+                              end do
+                           end do
+                        end do
+
+                        if (.not. flag) then
+                           crho(i, j, k) = 100d0
+                           cgrad(i, j, k) = 100d0
+                           cheig(i, j, k) = 0d0
+                           cycle
+                        end if
+   21                   continue
+
+                     end if
+                  end do
                end do
             end do
-         end do
-         call system_clock(count=c2)
-         write (*, "(A, F6.2, A)") ' Time for computing density & RDG = ', real(dble(c2 - c1)/dble(cr), kind=8), ' secs'
-      endif !is inter !very experimental wfn intermolecular
-   endif !iswfn
+            call system_clock(count=c2)
+            write (*, "(A, F6.2, A)") ' Time for computing density & RDG = ', real(dble(c2 - c1)/dble(cr), kind=8), ' secs'
+         else !very experimental wfn intermolecular
+            call system_clock(count=c1)
+            do molid = 1, nfiles
+               call calcprops_id_wfn(xinit, xinc, nstep, m, nfiles, molid, crho, cgrad, cheig)
+               crho_n(:, :, :, molid) = crho(:, :, :)
+            end do
+            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig)
+            do k = 0, nstep(3) - 1
+               do j = 0, nstep(2) - 1
+                  do i = 0, nstep(1) - 1
+                     x = xinit + (/i, j, k/)*xinc
+                     if (.not. firstgrid) then
+                        ! check if x is used, not removed
+                        flag = .false.
+                        do i0 = max(0, i - 1), i
+                           do j0 = max(0, j - 1), j
+                              do k0 = max(0, k - 1), k
+                                 ! For each x, look for i, j, k indices in the previous coarser grid
+                                 indx = floor(((/i0, j0, k0/)*xinc)/xinc_coarse)
+                                 indx = (/min(nstep_coarse(1) - 2, indx(1)), min(nstep_coarse(2) - 2, indx(2)), &
+                                          min(nstep_coarse(3) - 2, indx(3))/)
+                                 if ((.not. flag) .and. (.not. (rmbox_coarse(indx(1), indx(2), indx(3))))) then
+                                    flag = .true.
+                                    goto 22
+                                 end if
+                              end do
+                           end do
+                        end do
+                        rho = crho(i,j,k)
+                        intra = inter .and. (any(crho_n(i, j, k, 1:nfrag) >= crho(i, j, k)*rhoparam))
+                        if (intra) then !checks for interatomic
+                           cgrad(i, j, k) = -cgrad(i, j, k)
+                        end if
+                        if (.not. flag) then
+                           crho(i, j, k) = 100d0
+                           cgrad(i, j, k) = 100d0
+                           cheig(i, j, k) = 0d0
+                           cycle
+                        end if
+   22                   continue
 
-   if ((ind_g .le. ng) .or. (ng .eq. 1)) then
-      xinc_coarse = xinc ! record increments of the previous coarse grid
-      nstep_coarse = nstep
-      firstgrid = .false.
-      if (allocated(rmbox_coarse)) then
-         deallocate (rmbox_coarse)
-         allocate (tmp_rmbox(0:nstep_coarse(1) - 2, 0:nstep_coarse(2) - 2, 0:nstep_coarse(3) - 2), stat=istat)
-         if (istat /= 0) call error('nciplot', 'could not allocate memory for tmp_rmbox', faterr)
-         call build_rmbox_coarse(rhocut, dimcut, ng, ind_g, fginc, tmp_rmbox, crho, cgrad, nstep_coarse)
-         call move_alloc(tmp_rmbox, rmbox_coarse)
-      else
-         allocate (rmbox_coarse(0:nstep_coarse(1) - 2, 0:nstep_coarse(2) - 2, 0:nstep_coarse(3) - 2), stat=istat)
-         if (istat /= 0) call error('nciplot', 'could not allocate memory for rmbox_coarse', faterr)
-         call build_rmbox_coarse(rhocut, dimcut, ng, ind_g, fginc, rmbox_coarse, crho, cgrad, nstep_coarse)
+                     end if
+                  end do
+               end do
+            end do
+            call system_clock(count=c2)
+            write (*, "(A, F6.2, A)") ' Time for computing density & RDG = ', real(dble(c2 - c1)/dble(cr), kind=8), ' secs'
+         endif !is inter !very experimental wfn intermolecular
+      endif !iswfn
+
+      if ((ind_g .le. ng) .or. (ng .eq. 1)) then
+         xinc_coarse = xinc ! record increments of the previous coarse grid
+         nstep_coarse = nstep
+         firstgrid = .false.
+         if (allocated(rmbox_coarse)) then
+            deallocate (rmbox_coarse)
+            allocate (tmp_rmbox(0:nstep_coarse(1) - 2, 0:nstep_coarse(2) - 2, 0:nstep_coarse(3) - 2), stat=istat)
+            if (istat /= 0) call error('nciplot', 'could not allocate memory for tmp_rmbox', faterr)
+            call build_rmbox_coarse(rhocut, dimcut, ng, ind_g, fginc, tmp_rmbox, crho, cgrad, nstep_coarse)
+            call move_alloc(tmp_rmbox, rmbox_coarse)
+         else
+            allocate (rmbox_coarse(0:nstep_coarse(1) - 2, 0:nstep_coarse(2) - 2, 0:nstep_coarse(3) - 2), stat=istat)
+            if (istat /= 0) call error('nciplot', 'could not allocate memory for rmbox_coarse', faterr)
+            call build_rmbox_coarse(rhocut, dimcut, ng, ind_g, fginc, rmbox_coarse, crho, cgrad, nstep_coarse)
+         end if
+         if (allocated(tmp_rmbox)) then
+            deallocate (tmp_rmbox)
+         end if
       end if
-      if (allocated(tmp_rmbox)) then
-         deallocate (tmp_rmbox)
+
+      ! loop over multi-level grids
+      ind_g = ind_g + 1
+      if (ind_g .le. ng) then
+         goto 12 ! shameful goto to end multilevel grids.
       end if
-   end if
-
-! loop over multi-level grids
-   ind_g = ind_g + 1
-   if (ind_g .le. ng) then
-      goto 12 ! shameful goto to end multilevel grids.
-   end if
-
-   !===============================================================================!
-   ! Write output files.
-   !===============================================================================!
-   if (isverbose) write (uout, 122)
-   if (noutput == 1 .or. noutput == 3) then
-      if (isverbose) write (uout, 123) trim(oname)//".dat"
-   end if
-
-   if (noutput >= 2) then
-      if (isverbose) write (uout, 124) trim(oname)//"-grad.cube", &
-         trim(oname)//"-dens.cube", &
-         trim(oname)//".vmd"
-   end if
-   if (lugc > 0) call write_cube_header(lugc, 'grad_cube', '3d plot, reduced density gradient')
-   if (ludc > 0) call write_cube_header(ludc, 'dens_cube', '3d plot, density')
-   ! if (lurc > 0) call write_cube_header(lurc, 'rmbox_cube', '3d plot, boolean integration box')
-   ! if (ludc1 > 0) call write_cube_header(ludc1, 'dens_cube', '3d plot, density monomer 1')
-   ! if (ludc2 > 0) call write_cube_header(ludc2, 'dens_cube', '3d plot, density monomer 2')
 
    !===============================================================================!
    ! Output of .mesh and .sol files.
    !===============================================================================!
-   call system_clock(count=c3)
-   if (noutput .eq. 4) then
-      allocate (vert_use(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1))
+      call system_clock(count=c3)
       if (noutput .eq. 4) then
-         lumesh = 20
-         lusol = 21
-      else
-         lumesh = -1
-         lusol = -1
-      endif
-      if (noutput .eq. 4) then
-         open (lumesh, file=trim(oname)//".mesh")
-         open (lusol, file=trim(oname)//".sol")
-         call write_mesh_file(lumesh, lusol, xinit, xinc, nstep, cgrad, xinc_coarse, rmbox_coarse, &
-                              nstep_coarse, vert_use)
-         close (lumesh)
-         close (lusol)
-      endif
-      if (allocated(vert_use)) then
-         deallocate (vert_use)
-      end if
-   end if
-else ! is a cube file
-    ! first we allocate gradient array
-    allocate (cgrad(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
-    if (istat /= 0) call error('nciplot', 'could not allocate memory for grad', faterr)
-    allocate (crho(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
-    if (istat /= 0) call error('nciplot', 'could not allocate memory for signed density', faterr)
- 
-    do it1=0,nstep(1)-1 ! first we initialise the reduced gradient array to 100d0
-    do it2=0,nstep(2)-1
-    do it3=0,nstep(3)-1
-    cgrad(it1,it2,it3) = 100d0
-    end do
-    end do
-    end do
-    flag_dens_neg = .FALSE.
-    DO it1=3,nstep(1)-3 ! since numerical differentiation reaches point +/- 2
-      DO it2=3,nstep(2)-3 ! in the following we use the numerical differentiation to compute Hessian on a grid
-			DO it3=3,nstep(3)-3
-         if (m(1)%cubedens(it1,it2,it3) .LT. 0.0) then ! Density is negative, a messagge appear and values are 0.0
-            flag_dens_neg = .TRUE.
-            m(1)%cubedens(it1,it2,it3)=abs(m(1)%cubedens(it1,it2,it3))
+         allocate (vert_use(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1))
+         if (noutput .eq. 4) then
+            lumesh = 20
+            lusol = 21
+         else
+            lumesh = -1
+            lusol = -1
+         endif
+         if (noutput .eq. 4) then
+            open (lumesh, file=trim(oname)//".mesh")
+            open (lusol, file=trim(oname)//".sol")
+            call write_mesh_file(lumesh, lusol, xinit, xinc, nstep, cgrad, xinc_coarse, rmbox_coarse, &
+                                 nstep_coarse, vert_use)
+            close (lumesh)
+            close (lusol)
+         endif
+         if (allocated(vert_use)) then
+            deallocate (vert_use)
          end if
+      end if
 
-			if ((m(1)%cubedens(it1,it2,it3) .LE. rhocut)) THEN!.and. (m(1)%cubedens(it1,it2,it3)  .GT. 1d-6)) THEN ! we restrict computation of gradient & hessian to low density regions
-            cgrad(it1,it2,it3) = (SQRT(                                                               &   ! ||grad_p(r)||
-            ((m(1)%cubedens(it1+1,it2,it3) - m(1)%cubedens(it1-1,it2,it3)) / (2.*m(1)%xinc0(1)))**2.d0 + &   ! grad_x
-   			((m(1)%cubedens(it1,it2+1,it3) - m(1)%cubedens(it1,it2-1,it3)) / (2.*m(1)%xinc0(2)))**2.d0 + &   ! grad_y
-   			((m(1)%cubedens(it1,it2,it3+1) - m(1)%cubedens(it1,it2,it3-1)) / (2.*m(1)%xinc0(3)))**2.d0 )) &  ! grad_z
-   			/((2.d0*((3.d0*pi**2.d0)**(1.d0/3.d0)))*(m(1)%cubedens(it1,it2,it3)**(4.d0/3.d0)))                   ! (2*((3*pi**2)**1/3) * (p(r)**4/3))
-   			
-            hess(1,1) = ((m(1)%cubedens(it1+2,it2,it3)) - 2*(m(1)%cubedens(it1+1,it2,it3)) + (m(1)%cubedens(it1,it2,it3)) ) &
-                           /(m(1)%xinc0(1) * m(1)%xinc0(1)) 
-   			hess(2,2) = ((m(1)%cubedens(it1,it2+2,it3)) - 2*(m(1)%cubedens(it1,it2+1,it3)) + &
-                           (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(2) * m(1)%xinc0(2)) 
-   			hess(3,3) = ((m(1)%cubedens(it1,it2,it3+2)) - 2*(m(1)%cubedens(it1,it2,it3+1)) +&
-                            (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(3) * m(1)%xinc0(3)) 
-   			hess(1,2) = ((m(1)%cubedens(it1+1,it2+1,it3)) - (m(1)%cubedens(it1+1,it2,it3)) - &
-                           (m(1)%cubedens(it1,it2+1,it3)) + (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(1) * m(1)%xinc0(2)) 
-   			hess(1,3) = ((m(1)%cubedens(it1+1,it2,it3+1)) - (m(1)%cubedens(it1+1,it2,it3)) - &
-                           (m(1)%cubedens(it1,it2,it3+1)) + (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(1) * m(1)%xinc0(3)) 
-   			hess(2,3) = ((m(1)%cubedens(it1,it2+1,it3+1)) - (m(1)%cubedens(it1,it2+1,it3)) - &
-                           (m(1)%cubedens(it1,it2,it3+1)) + (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(2) * m(1)%xinc0(3)) 
-   			hess(2,1) = hess(1,2)
-   			hess(3,1) = hess(1,3)
-   			hess(3,2) = hess(2,3)
-	
-   			call RS(3,3,hess,heigs,0,hvecs,wk1,wk2,istat) ! matrix diagonalisation defined in props
-   			crho(it1,it2,it3) = sign(real(m(1)%cubedens(it1,it2,it3)),real(heigs(2)))*100.d0
-        else
-                                                   ! Should be 0.0
-            cgrad(it1,it2,it3) = 100d0
-            crho(it1,it2,it3) = 0d0
-			END IF
-			END DO
-		END DO
-	END DO
-        
-   call system_clock(count=c3)
-   if (flag_dens_neg) then
-      write (uout, 137) 
-   endif
-end if ! isnotcube
+   else ! is a cube file
+      ! first we allocate gradient array
+      allocate (cgrad(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
+      if (istat /= 0) call error('nciplot', 'could not allocate memory for grad', faterr)
+      allocate (crho(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
+      if (istat /= 0) call error('nciplot', 'could not allocate memory for signed density', faterr)
+   
+      do it1=0,nstep(1)-1 ! first we initialise the reduced gradient array to 100d0
+         do it2=0,nstep(2)-1
+            do it3=0,nstep(3)-1
+               cgrad(it1,it2,it3) = 100d0
+            end do
+         end do
+      end do
+      flag_dens_neg = .FALSE.
+      do it1=3,nstep(1)-3 ! since numerical differentiation reaches point +/- 2
+         do it2=3,nstep(2)-3 ! in the following we use the numerical differentiation to compute Hessian on a grid
+            do it3=3,nstep(3)-3
+               if (m(1)%cubedens(it1,it2,it3) .LT. 0.0) then ! Density is negative, a messagge appear and values are 0.0
+                  flag_dens_neg = .TRUE.
+                  m(1)%cubedens(it1,it2,it3)=abs(m(1)%cubedens(it1,it2,it3))
+               end if
+
+               if ((m(1)%cubedens(it1,it2,it3) .LE. rhocut)) then!.and. (m(1)%cubedens(it1,it2,it3)  .GT. 1d-6)) THEN ! we restrict computation of gradient & hessian to low density regions
+                  cgrad(it1,it2,it3) = (SQRT(                                                               &   ! ||grad_p(r)||
+                  ((m(1)%cubedens(it1+1,it2,it3) - m(1)%cubedens(it1-1,it2,it3)) / (2.*m(1)%xinc0(1)))**2.d0 + &   ! grad_x
+                  ((m(1)%cubedens(it1,it2+1,it3) - m(1)%cubedens(it1,it2-1,it3)) / (2.*m(1)%xinc0(2)))**2.d0 + &   ! grad_y
+                  ((m(1)%cubedens(it1,it2,it3+1) - m(1)%cubedens(it1,it2,it3-1)) / (2.*m(1)%xinc0(3)))**2.d0 )) &  ! grad_z
+                  /((2.d0*((3.d0*pi**2.d0)**(1.d0/3.d0)))*(m(1)%cubedens(it1,it2,it3)**(4.d0/3.d0)))                   ! (2*((3*pi**2)**1/3) * (p(r)**4/3))
+                  
+                  hess(1,1) = ((m(1)%cubedens(it1+2,it2,it3)) - 2*(m(1)%cubedens(it1+1,it2,it3)) + (m(1)%cubedens(it1,it2,it3)) ) &
+                                 /(m(1)%xinc0(1) * m(1)%xinc0(1)) 
+                  hess(2,2) = ((m(1)%cubedens(it1,it2+2,it3)) - 2*(m(1)%cubedens(it1,it2+1,it3)) + &
+                                 (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(2) * m(1)%xinc0(2)) 
+                  hess(3,3) = ((m(1)%cubedens(it1,it2,it3+2)) - 2*(m(1)%cubedens(it1,it2,it3+1)) +&
+                                 (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(3) * m(1)%xinc0(3)) 
+                  hess(1,2) = ((m(1)%cubedens(it1+1,it2+1,it3)) - (m(1)%cubedens(it1+1,it2,it3)) - &
+                                 (m(1)%cubedens(it1,it2+1,it3)) + (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(1) * m(1)%xinc0(2)) 
+                  hess(1,3) = ((m(1)%cubedens(it1+1,it2,it3+1)) - (m(1)%cubedens(it1+1,it2,it3)) - &
+                                 (m(1)%cubedens(it1,it2,it3+1)) + (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(1) * m(1)%xinc0(3)) 
+                  hess(2,3) = ((m(1)%cubedens(it1,it2+1,it3+1)) - (m(1)%cubedens(it1,it2+1,it3)) - &
+                                 (m(1)%cubedens(it1,it2,it3+1)) + (m(1)%cubedens(it1,it2,it3)) )/(m(1)%xinc0(2) * m(1)%xinc0(3)) 
+                  hess(2,1) = hess(1,2)
+                  hess(3,1) = hess(1,3)
+                  hess(3,2) = hess(2,3)
+      
+               call RS(3,3,hess,heigs,0,hvecs,wk1,wk2,istat) ! matrix diagonalisation defined in props
+               crho(it1,it2,it3) = sign(real(m(1)%cubedens(it1,it2,it3)),real(heigs(2)))*100.d0
+               
+               else ! Should be 0.0
+                  cgrad(it1,it2,it3) = 100d0
+                  crho(it1,it2,it3) = 0d0
+               end if
+            end do
+         end do
+      end do
+
+      call system_clock(count=c3)
+      if (flag_dens_neg) then
+         write (uout, 137) 
+      endif
+
+   end if ! isnotcube
    !===============================================================================!
    ! Write .dat file.
    !===============================================================================!
@@ -1006,11 +990,27 @@ end if ! isnotcube
    end do
 
    !===============================================================================!
+   ! Write output files.
+   !===============================================================================!
+   if (isverbose) write (uout, 122)
+   if (noutput == 1 .or. noutput == 3) then
+      if (isverbose) write (uout, 123) trim(oname)//".dat"
+   end if
+
+   if (noutput >= 2) then
+      if (isverbose) write (uout, 124) trim(oname)//"-grad.cube", &
+         trim(oname)//"-dens.cube", &
+         trim(oname)//".vmd"
+   end if
+   if (lugc > 0) call write_cube_header(lugc, 'grad_cube', '3d plot, reduced density gradient')
+   if (ludc > 0) call write_cube_header(ludc, 'dens_cube', '3d plot, density')
+
+   !===============================================================================!
    ! Write the complete cube files. Commented out in favour of writing only intergation region
    !===============================================================================!
    ! if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
    ! if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
-  
+
    call system_clock(count=c4)
    write (*, "(A, F6.2, A)") ' Time for writing outputs = ', real(dble(c4 - c3)/dble(cr), kind=8), ' secs'
   
@@ -1057,19 +1057,11 @@ end if ! isnotcube
                   k1 = (/k, k + 1/)
                   dimgrad = abs(cgrad(i, j, k))
                   if (inter) then
-                     !do l = 1, nfrag
-                     !   IsInter =((abs(crho_n(i1, j1, k1, l))*100d0 .ge. abs(crho(i1, j1, k1))*rhoparam))
-                     !   if (count(IsInter) .gt. 0) then
-                     !      rmbox_coarse(i, j, k) = .true. ! inactive
-                     !   end if
-                     !end do
                      if (any(abs(crho_n(i, j, k, 1:nfrag))*100d0 .ge. abs(crho(i, j, k))*rhoparam)) then
                         rmbox_coarse(i, j, k) = .true.
                         cgrad(i, j, k) = 100d0
                      end if
                   end if
-                  ! why is this check here again??? Isn't this decided in rmbox_coarse formation?
-                  ! It looks like a FIX to BROKEN idea of wfn intermolecularity
                   if (((dimgrad > dimcut) .and. .not. rmbox_coarse(i, j, k))) then ! this is the isovalue
                      rmbox_coarse(i, j, k) = .true. !inactive
                   endif ! rhocut/dimcut
@@ -1215,9 +1207,6 @@ end if ! isnotcube
       end do
       if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
       if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
-      ! if (lurc > 0) call write_cube_body_l(lurc, nstep, rmbox_coarse)  ! rmbox_coarse
-      ! if (ludc1 > 0) call write_cube_body(ludc1, nstep, crho_n(:, :, :, 1))         ! density monomer1
-      ! if (ludc2 > 0) call write_cube_body(ludc2, nstep, crho_n(:, :, :, 2))         ! density monomer2
       call system_clock(count=c4)
       write (*, "(A, F6.2, A)") ' Time for writing outputs = ', real(dble(c4 - c3)/dble(cr), kind=8), ' secs'
    end if
@@ -1257,7 +1246,9 @@ end if ! isnotcube
    if (luvmd > 0) then
       write (luvmd, 114) trim(oname)//"-dens.cube"
       write (luvmd, 115) trim(oname)//"-grad.cube"
-      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -rhocut*100D0, rhocut*100D0, 2, 2
+      ! write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -rhocut*100D0, rhocut*100D0, 2, 2
+      ! Neater colour isosurface plotting in VMD
+      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -4D0, 4D0, 2, 2 
       close (luvmd)
    end if
 
