@@ -50,6 +50,7 @@ def calculate_energy_cluster(output, ispromol, mol1, mol2, filename):
 
     # SIGMA HOLE CHECK 
     CPs = filename + "_CPs.xyz"
+    print(" For the time being, can only use XYZ input files for sigma hole detection. WFN alternative soon to come")
     CP_Atoms = find_CP_Atom_matches(CPs, mol1, mol2)
     sigma_bonds = find_sigma_bond(mol1, mol2)  # will be [] if None
     # now, are there any Atom Pairings that match? Those should be sigma_holes

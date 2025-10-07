@@ -36,7 +36,7 @@ program nciplot
    ! python ones
    integer(c_int) :: py_status
    character(kind=c_char, len=1000) :: command_ncicluster
-   character(kind=c_char, len=5000) :: command_ncienergy
+   character(kind=c_char, len=10000) :: command_ncienergy
    integer :: iounit_p1
    logical :: doclustering, ncienergy, isverbose
 
@@ -1299,9 +1299,10 @@ do while (.true.)
       ! Close the file
       close(iounit_p1)
 
-      write(command_ncienergy, '(A,A,A,A,F5.1,A,F5.2,A,F5.2,A,F5.2,A,L1,A,L1,A,L1,A,A,A,A)') &
+      write(command_ncienergy, '(A,A,A,A,A,A,F5.1,A,F5.2,A,F5.2,A,F5.2,A,L1,A,L1,A,L1,A,A,A,A)') &
       trim(adjustl(nciplot_home)), 'scripts/NCIENERGY.py', & 
       ' tmp_ncienergy_file', &
+      ' --oname ', oname, &
       ' --isovalue ', dimcut, &
       ' --outer ', srhorange(3, 2), &
       ' --inner ', srhorange(3, 1), &
@@ -1563,7 +1564,7 @@ contains
       write (lu, '(I5,3(F12.6))') nstep(3), 0d0, 0d0, xinc(3)
       do i = 1, nfiles
          do j = 1, m(i)%n
-            write (lu, '(I4,F5.1,F11.6,F11.6,F11.6)') m(i)%z(j), 0d0, m(i)%x(:, j)
+            write (lu, '(I5,F12.6,F12.6,F12.6,F12.6)') m(i)%z(j), 0d0, m(i)%x(:, j)
          end do
       enddo
 
@@ -1586,7 +1587,7 @@ contains
 
    end subroutine write_cube_body
 
-   subroutine write_cube_body_l(lu, n, c)
+   subroutine write_cube_body_l(lu, n, c) ! logical alternative
 
       integer, intent(in) :: lu
       integer, intent(in) :: n(3)

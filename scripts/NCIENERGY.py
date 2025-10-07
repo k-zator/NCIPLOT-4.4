@@ -12,7 +12,6 @@ including ones where sigma hole interactions are present.
 Parameters: path to nci_output_file. (afaik, it produces the values in the file in previous step so this is sort of recursive)
 """
 
-
 # Set options from command line
 options = []
 if sys.argv[1]!="--help":
@@ -23,7 +22,8 @@ else:
 if len(sys.argv)>2:
     options += sys.argv[2:]
 
-opt_dict = options_energy_calc(options)#
+opt_dict = options_energy_calc(options)
+oname    = opt_dict["oname"]
 gamma    = opt_dict["gamma"]
 l_large  = opt_dict["outer"]
 l_small  = opt_dict["inner"]
@@ -34,7 +34,7 @@ cluster  = opt_dict["cluster"]
 if cluster:
     mol1 = opt_dict["mol1"]
     mol2 = opt_dict["mol2"]
-    
+
 # Read input file
 files = []
 with open(input_name, "r") as f:
@@ -49,20 +49,20 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
         pass
     else:
         print(" NCIENERGY mode runs only with the default parameters:")
-        print(" DENS_CUTOFF 0.85 (0.75 for DFT)")
         print(" RDG_CUTOFF 1.00 0.30")
         print(" INTEGRATE")
-        print(" RANGE")
+        print(" INTERMOL_CUTOFF 0.85 (0.75 for DFT)")
+        print(" RANGE 3")
         print(" -0.20 -0.02")
         print(" -0.02  0.02")
         print("  0.02  0.20")
 
     # obtain the contents of the nci_output file
     try:
-        with open("nci_output.txt") as f: #need to know the NAME of output!!!
+        with open(f"nci_{oname}.out") as f: # need to know the NAME of output which it techincally has no way of finding out!!!
             contents = f.readlines()
     except FileNotFoundError:
-        print("Error: nci_output.txt not found. Please ensure that your NCIPLOT output file is named 'nci_output.txt'.")
+        print(f"Error: nci_{oname}.out not found. Please ensure that your NCIPLOT output file is named 'nci_{oname}.out'.")
         sys.exit(1)
     print("----------------------------------------------------------------------")
     print("                             NCIENERGY                                ")
@@ -121,9 +121,9 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
 
 else:
     print(" NCIENERGY mode runs only with the default parameters:")
-    print(" DENS_CUTOFF 0.85 (0.75 for DFT)")
     print(" RDG_CUTOFF 1.00 0.30")
     print(" INTEGRATE")
+    print(" INTERMOL_CUTOFF 0.85 (0.75 for DFT)")
     print(" RANGE")
     print(" -0.20 -0.02")
     print(" -0.02  0.02")
