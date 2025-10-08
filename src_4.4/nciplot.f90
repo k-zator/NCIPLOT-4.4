@@ -727,8 +727,8 @@ do while (.true.)
                   intra = inter .and. (any(rhom(1:nfrag) >= sum(rhom(1:nfrag))*rhoparam))
                   if (intra) dimgrad = -dimgrad !checks for interatomic, intra is true iff inter and condition hold
                   !$omp critical (cubewrite)
-                  ! write to cube file, dont take into account rho values to low
-                  if (rho /= 1d-30) then
+                  ! write to cube file, dont take into account rho values too low
+                  if (rho .gt. 1d-30) then
                      crho(i, j, k) = sign(rho, heigs(2))*100.D0
                      cgrad(i, j, k) = dimgrad
                   else
@@ -759,6 +759,14 @@ do while (.true.)
                do j = 0, nstep(2) - 1
                   do i = 0, nstep(1) - 1
                      x = xinit + (/i, j, k/)*xinc
+
+                     ! rid of spurious too low-density low-RDG regions
+                     if (abs(crho(i, j, k)) .lt. 1d-27) then
+                        crho(i, j, k) = 100d0
+                        cgrad(i, j, k) = 100d0
+                        cheig(i, j, k) = 0d0
+                     end if 
+
                      if (.not. firstgrid) then
                         ! check if x is used, not removed
                         flag = .false.
@@ -784,7 +792,6 @@ do while (.true.)
                            cycle
                         end if
    21                   continue
-
                      end if
                   end do
                end do
@@ -969,19 +976,13 @@ do while (.true.)
             cgrad(i, j, k) = abs(cgrad(i, j, k))
             dimgrad = cgrad(i, j, k)
             rho = crho(i, j, k)/100d0
-            ! write the dat file
-            if (ludat > 0 .and. .not. intra .and. (abs(rho) < rhocut) .and. (dimgrad < dimcut) .and. &
-                abs(rho) > 1d-30) then
-               write (ludat, '(1p,E18.10,E18.10)') rho, dimgrad
-            endif ! rhocut/dimcut
-   
-            ! prepare the cube files !!modifJ
-             if ((abs(rho) > rhocut) .or. (dimgrad > dimcut)) then ! this is the isovalue and density criterion
+
+            if ((abs(rho) > rhocut) .or. (dimgrad > dimcut)) then ! this is the isovalue and density criterion
+                cgrad(i, j, k) = 101d0
+            endif !rho cutoff
+            if (intra) then ! intermolecular points also to 100
                  cgrad(i, j, k) = 101d0
-             endif !rho cutoff
-             if (intra) then ! intermolecular points also to 100
-                  cgrad(i, j, k) = 101d0
-             endif
+            endif
             if ((abs(rho) == 0.0) .and. (cgrad(i,j,k) .NE. 100.)) then
                cgrad(i,j,k) = 101d0  !NaN values has rho = 0.0, cgrad in that position would be 0
             endif
