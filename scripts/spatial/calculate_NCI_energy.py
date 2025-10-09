@@ -1,4 +1,5 @@
 #!/bin/python
+import sys
 import numpy as np
 from spatial.sigma_hole_detection import find_sigma_bond
 from spatial.DIVIDE import find_CP_Atom_matches
@@ -6,7 +7,7 @@ from spatial.DIVIDE import find_CP_Atom_matches
 """Critically also need to find the place to add the sigma hole detection to use a different energy equation 
     BUT this also requires finding the whole geometry of the complex"""
 
-def calculate_energy_single(output, ispromol):
+def calculate_energy_single(output, ispromol, supra):
     """Calculate the NCI energy given the NCIPLOT output contents for single integration"""
 
     sis = output.index("               RANGE INTEGRATION DATA                                 \n")
@@ -16,29 +17,41 @@ def calculate_energy_single(output, ispromol):
     NCI_index_dict = {"Strong": polar[[0,5,1,6,2,3,4]] , "Weak": vdw[[0,5,1,6,2,3,4]] , "Repulsion": rep[[0,5,1,6,2,3,4]]}
 
     if ispromol:
-        E_polar  = -np.array(27.424896*np.power(NCI_index_dict["Strong"][1], 0.333) + 2759.675*(NCI_index_dict["Strong"][4]))
-        E_vdw = -np.array(-79.92235*np.power(NCI_index_dict["Weak"][3], 0.333) + 50.483402*np.power(NCI_index_dict["Weak"][0],0.5))
+        if supra:
+            E_polar = -1381.3065*np.array(NCI_index_dict["Strong"][3])
+            E_vdw = 424.2966*np.array(NCI_index_dict["Weak"][1]) -109.60437*np.array(NCI_index_dict["Weak"][0] + NCI_index_dict["Weak"][6]**(1/3))
+        else:
+            E_polar  = -np.array(27.424896*np.power(NCI_index_dict["Strong"][1], 0.333) + 2759.675*(NCI_index_dict["Strong"][4]))
+            E_vdw = -np.array(-79.92235*np.power(NCI_index_dict["Weak"][3], 0.333) + 50.483402*np.power(NCI_index_dict["Weak"][0],0.5))
     else: #WFN
-        E_polar = -np.array(3399.1965*NCI_index_dict["Strong"][2])
-        E_vdw = -np.array(-811.5827*NCI_index_dict["Weak"][0]**2 + 115.258*np.power(NCI_index_dict["Weak"][5], 0.333) + 3399.1965*NCI_index_dict["Weak"][2])
+        if supra:
+            print(" Supramolecular mode is currently incompatible with the WFN mode, " \
+            "       check back soon for the updates or use the promolecular mode")
+            sys.exit(1)
+        else:
+            E_polar = -np.array(3399.1965*NCI_index_dict["Strong"][2])
+            E_vdw = -np.array(-811.5827*NCI_index_dict["Weak"][0]**2 + 115.258*np.power(NCI_index_dict["Weak"][5], 0.333) + 3399.1965*NCI_index_dict["Weak"][2])
     
     return E_polar + E_vdw, E_polar, E_vdw
 
 
 
-def calculate_energy_cluster(output, ispromol, mol1, mol2, filename):
+def calculate_energy_cluster(output, ispromol, supra, mol1, mol2, filename):
     """Calculate the NCI energy given the NCIPLOT output contents for clustering intergration"""
 
-    def energy(NCI_index_dict, ispromol, sigma_hole=False):
+    def energy(NCI_index_dict, ispromol, supra, sigma_hole=False):
         "Calculate energy of a single cluster given its NCI indices"
         if ispromol:
             if sigma_hole:
                 E_polar = -1064.0465*np.array(NCI_index_dict["Strong"][3])
                 E_vdw = -1064.0465*np.array(NCI_index_dict["Weak"][3]) - 5.8970227
             else:
-                E_polar = -np.array(27.424896*np.power(NCI_index_dict["Strong"][1], 0.333) + 2759.675*(NCI_index_dict["Strong"][4]))
-                print(f"Note, using polar: {E_polar}")
-                E_vdw = -np.array(-79.92235*np.power(NCI_index_dict["Weak"][3], 0.333) + 50.483402*np.power(NCI_index_dict["Weak"][0],0.5))
+                if supra:
+                    E_polar = -1381.3065*np.array(NCI_index_dict["Strong"][3])
+                    E_vdw = 424.2966*np.array(NCI_index_dict["Weak"][1]) -109.60437*np.array(NCI_index_dict["Weak"][0] + NCI_index_dict["Weak"][6]**(1/3))
+                else:
+                    E_polar = -np.array(27.424896*np.power(NCI_index_dict["Strong"][1], 0.333) + 2759.675*(NCI_index_dict["Strong"][4]))
+                    E_vdw = -np.array(-79.92235*np.power(NCI_index_dict["Weak"][3], 0.333) + 50.483402*np.power(NCI_index_dict["Weak"][0],0.5))
         
         else: #WFN
             E_polar = -np.array(3399.1965*NCI_index_dict["Strong"][2])
@@ -71,7 +84,7 @@ def calculate_energy_cluster(output, ispromol, mol1, mol2, filename):
         nonpolar_i += vdw[0]
         if sigma_hole_mask[i]:
             print(f" Note, cluster {i} contains a sigma hole. Energy is calculated with a dedicated sigma hole equation")
-        e_sum, e_polar, e_vdw = energy(NCI_index_dict, ispromol, sigma_hole=sigma_hole_mask[i])
+        e_sum, e_polar, e_vdw = energy(NCI_index_dict, ispromol, supra, sigma_hole=sigma_hole_mask[i])
         E_sum.append(e_sum)
         E_polar.append(e_polar)
         E_vdw.append(e_vdw)

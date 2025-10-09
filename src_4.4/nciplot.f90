@@ -38,7 +38,7 @@ program nciplot
    character(kind=c_char, len=1000) :: command_ncicluster
    character(kind=c_char, len=10000) :: command_ncienergy
    integer :: iounit_p1
-   logical :: doclustering, ncienergy, isverbose
+   logical :: doclustering, ncienergy, isverbose, supra
 
    integer, parameter :: mfiles = 100 ! max number of geometry files
 
@@ -296,6 +296,7 @@ program nciplot
    ! - DENSWEIGHT
    ! - CLUSTERING
    ! - NCIENERGY
+   ! - SUPRA
    ! - CG2FG
    ! - FINE
    ! - ULTRAFINE
@@ -333,6 +334,9 @@ do while (.true.)
       
       case ("NCIENERGY")
          ncienergy = .true.
+
+      case ("SUPRA")
+         supra = .true.
 
       case ("VERBOSE")
          isverbose = .true.
@@ -1299,8 +1303,7 @@ do while (.true.)
       write(iounit_p1, '(A)') trim(adjustl(oname))
       ! Close the file
       close(iounit_p1)
-
-      write(command_ncienergy, '(A,A,A,A,A,A,F5.1,A,F5.2,A,F5.2,A,F5.2,A,L1,A,L1,A,L1,A,A,A,A)') &
+      write(command_ncienergy, '(A,A,A,A,A,A,F5.1,A,F5.2,A,F5.2,A,F5.2,A,L1,A,L1,A,L1,A,L1,A,A,A,A)') &
       trim(adjustl(nciplot_home)), 'scripts/NCIENERGY.py', & 
       ' tmp_ncienergy_file', &
       ' --oname ', oname, &
@@ -1311,6 +1314,7 @@ do while (.true.)
       ' --intermol ', inter, &
       ' --ispromol ', ispromol, &
       ' --clustering ', doclustering, &
+      ' --supra ', supra, &
       ' --mol1 ', filenames(1), &
       ' --mol2 ', filenames(2)
       py_status = system(trim(adjustl(command_ncienergy)))

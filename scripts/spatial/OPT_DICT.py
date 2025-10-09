@@ -39,7 +39,8 @@ def options_dict(options):
     return opt_dict
 
 def options_energy_calc(options):
-    opt_dict = {"isovalue": 1.0, "outer": 0.2, "inner": 0.02, "gamma": 0.85, "intermol": True, "ispromol": True, "cluster": False, "mol1": None, "mol2": None, "oname": "output"}
+    opt_dict = {"isovalue": 1.0, "outer": 0.2, "inner": 0.02, "gamma": 0.85, "intermol": True, "ispromol": True, 
+                "cluster": False, "supra": False, "mol1": None, "mol2": None, "oname": "output"}
     for i, op in enumerate(options[0::2]):
         if op == "--help":
             print(
@@ -53,6 +54,7 @@ def options_energy_calc(options):
                 "  --intermol im      determine if intermolecular mode is on, default True",
                 "  --ispromol p       determine if promolecular mode is on, default True",
                 "  --clustering c     determine if clustering mode in on, default False",
+                "  --supra s          determine if supramolecular mode in on, default False",
                 "  --mol1 m1          input molecular geometry, molecule1",
                 "  --mol2 m2          input molecular geometry, molecule2",
                 "                     (mol1 and mol2 must be set if clustering is True)",
@@ -84,6 +86,9 @@ def options_energy_calc(options):
             elif op == "--clustering":
                 if options[2 * i + 1] == "T":
                     opt_dict["cluster"] = True
+            elif op == "--supra":
+                if options[2 * i + 1] == "T":
+                    opt_dict["supra"] = True
             elif op == "--mol1":
                 opt_dict["mol1"] = options[2 * i + 1]
             elif op == "--mol2":
