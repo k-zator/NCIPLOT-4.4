@@ -1,6 +1,6 @@
 import numpy as np
-from collections import defaultdict
 from scipy.spatial import KDTree
+bohr_to_angstrom = 0.52917721067
 
 def group_grad_to_grid(coordinates, gradient, a, gradient_threshold):
     """
@@ -106,7 +106,7 @@ def write_CPs_xyz(CPs, filename):
             f.write(f"CP{i}   {coords[0]:.6f}   {coords[1]:.6f}   {coords[2]:.6f}\n")
 
 
-def find_CP_Atom_matches(CPs, mol1, mol2):
+def find_CP_Atom_matches(CPs, mol1, mol2, ispromol):
     """Given the CPs' positions, find the atom-atom interactions they correspond to
         Returns a list of lists: [CP_position, mol1_atom_idx, mol2_atom_idx] """
     
@@ -120,10 +120,26 @@ def find_CP_Atom_matches(CPs, mol1, mol2):
                     continue
                 coords.append([float(x) for x in parts[1:4]])
             return np.array(coords, dtype=float)
-    
-    cp_coords = read_xyz(CPs)
-    mol1_coords = read_xyz(mol1)
-    mol2_coords = read_xyz(mol2)
+        
+    def read_wfn(filename):
+        with open(filename, 'r') as f:
+            lines = f.readlines()[2:]
+            coords = []
+            for line in lines:
+                parts = line.split()
+                if len(parts) > 6:
+                    if parts[2] == '(CENTRE':
+                        coords.append([float(x)*bohr_to_angstrom for x in parts[4:7]])
+            return np.array(coords, dtype=float)
+        
+    if ispromol:
+        cp_coords = read_xyz(CPs)
+        mol1_coords = read_xyz(mol1)
+        mol2_coords = read_xyz(mol2)
+    else:  # WFN case - read from .xyz files generated from .wfn
+        cp_coords = read_xyz(CPs)
+        mol1_coords = read_wfn(mol1)
+        mol2_coords = read_wfn(mol2)
 
     matches = []
     for cp in cp_coords:

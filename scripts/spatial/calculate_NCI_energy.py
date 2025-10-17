@@ -45,17 +45,23 @@ def calculate_energy_cluster(output, ispromol, supra, mol1, mol2, filename):
             if sigma_hole:
                 E_polar = -1064.0465*np.array(NCI_index_dict["Strong"][3])
                 E_vdw = -1064.0465*np.array(NCI_index_dict["Weak"][3]) - 5.8970227
-            else:
-                if supra:
-                    E_polar = -1381.3065*np.array(NCI_index_dict["Strong"][3])
-                    E_vdw = 424.2966*np.array(NCI_index_dict["Weak"][1]) -109.60437*np.array(NCI_index_dict["Weak"][0] + NCI_index_dict["Weak"][6]**(1/3))
-                else:
-                    E_polar = -np.array(27.424896*np.power(NCI_index_dict["Strong"][1], 0.333) + 2759.675*(NCI_index_dict["Strong"][4]))
-                    E_vdw = -np.array(-79.92235*np.power(NCI_index_dict["Weak"][3], 0.333) + 50.483402*np.power(NCI_index_dict["Weak"][0],0.5))
-        
+            else: 
+                # do note, this has to be extensive and the only good enough equation is the supramolecular one
+                ratio = np.divide(NCI_index_dict["Strong"][6], NCI_index_dict["Strong"][4], 
+                                  out=np.zeros_like(NCI_index_dict["Strong"][6]), where=NCI_index_dict["Strong"][4] != 0)
+                E_polar = -447.69888*NCI_index_dict["Strong"][1] - 176.41492*ratio
+                E_vdw = -139.32413*NCI_index_dict["Weak"][0] + 556.22876*NCI_index_dict["Weak"][1]
+
         else: #WFN
-            E_polar = -np.array(3399.1965*NCI_index_dict["Strong"][2])
-            E_vdw = -np.array(-811.5827*NCI_index_dict["Weak"][0]**2 + 115.258*np.power(NCI_index_dict["Weak"][5], 0.333) + 3399.1965*NCI_index_dict["Weak"][2])
+            if supra:
+                print(" Supramolecular mode is currently incompatible with the WFN mode, " \
+                "       check back soon for the updates or use the promolecular mode")
+                sys.exit(1)
+            else: # i.e. uses the same equation as before but for now THIS IS NOT EXTENSIVE
+                print(" Warning, cluster energy calculation in WFN mode is not extensive, " \
+                        " check back soon for the updates or use the promolecular mode")
+                E_polar = -np.array(3399.1965*NCI_index_dict["Strong"][2])
+                E_vdw = -np.array(-811.5827*NCI_index_dict["Weak"][0]**2 + 115.258*np.power(NCI_index_dict["Weak"][5], 0.333) + 3399.1965*NCI_index_dict["Weak"][2])
         return E_polar + E_vdw, E_polar, E_vdw
 
     no_clusters = [int(s.split()[5]) for s in output if " Number of critical points found:" in s][0]
@@ -63,9 +69,8 @@ def calculate_energy_cluster(output, ispromol, supra, mol1, mol2, filename):
 
     # SIGMA HOLE CHECK 
     CPs = filename + "_CPs.xyz"
-    print(" For the time being, can only use XYZ input files for sigma hole detection. WFN alternative soon to come")
-    CP_Atoms = find_CP_Atom_matches(CPs, mol1, mol2)
-    sigma_bonds = find_sigma_bond(mol1, mol2)  # will be [] if None
+    CP_Atoms = find_CP_Atom_matches(CPs, mol1, mol2, ispromol)
+    sigma_bonds = find_sigma_bond(mol1, mol2, ispromol)  # will be [] if None
     # now, are there any Atom Pairings that match? Those should be sigma_holes
     sigma_hole_mask = [0]*no_clusters
     for i in range(no_clusters):

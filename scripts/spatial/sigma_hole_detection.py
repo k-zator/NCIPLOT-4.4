@@ -2,16 +2,25 @@
 
 import copy
 import numpy as np
+bohr_to_angstrom = 0.52917721067
 
-def obtain_coordinates(path1, path2):
+def obtain_coordinates(path1, path2, ispromol=False):
+    "Read coordinates from two .xyz files and return as numpy arrays"
     with open(f'{path1}', 'r') as file:
         input = file.readlines()
     coordinates = []
     elem = [] 
     for line in input[2:]: 
         parts = line.split() 
-        x, y, z = float(parts[1]), float(parts[2]), float(parts[3]) 
-        elem.append(parts[0])
+        if ispromol:
+            x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+            el = parts[0]
+        else: #with .wfn files the element is in the 2nd column
+            if len(parts) > 6:
+                if parts[2] == '(CENTRE':
+                    x, y, z =  float(parts[4])*bohr_to_angstrom, float(parts[5])*bohr_to_angstrom, float(parts[6])*bohr_to_angstrom
+                    el = parts[0]
+        elem.append(el)
         coordinates.append([x, y, z])
     coordinates_array_1 = np.array(coordinates)
     elem_array_1 = np.array(elem)
@@ -22,8 +31,15 @@ def obtain_coordinates(path1, path2):
     elem = [] 
     for line in input[2:]: 
         parts = line.split() 
-        x, y, z =  float(parts[1]), float(parts[2]), float(parts[3]) 
-        elem.append(parts[0])
+        if ispromol:
+            x, y, z = float(parts[1]), float(parts[2]), float(parts[3]) 
+            el = parts[0]
+        else: #with .wfn files the element is in the 2nd column
+            if len(parts) > 6:
+                if parts[2] == '(CENTRE':
+                    x, y, z =  float(parts[4])*bohr_to_angstrom, float(parts[5])*bohr_to_angstrom, float(parts[6])*bohr_to_angstrom
+                    el = parts[0]
+        elem.append(el)
         coordinates.append([x, y, z])
     coordinates_array_2 = np.array(coordinates)
     elem_array_2 = np.array(elem)
@@ -92,8 +108,8 @@ def detect_sigma_relevant_atoms(elem_1, bonds_1, coord_1, coord_2, halogen='Cl')
                         results.append((i, j, round(max_angle, 3), halogen))
     return results
 
-def find_sigma_bond(path1, path2):
-    coord_1, coord_2, elem_1, elem_2 = obtain_coordinates(path1, path2)
+def find_sigma_bond(path1, path2, ispromol):
+    coord_1, coord_2, elem_1, elem_2 = obtain_coordinates(path1, path2, ispromol)
     bonds_1 = obtain_coonectivity(coord_1)
     bonds_2 = obtain_coonectivity(coord_2)
     possible_sigma_bond = []

@@ -95,15 +95,9 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
             print("----------------------------------------------------------------------")
 
     else: # using WFN (vs. WFX?)
-        print(" Calculating energy using the DFT equation")
-        if supra:
-            print(" Supramolecular mode is currently incompatible with the WFN mode, " \
-            "       check back soon for the updates or use the promolecular mode")
-            print("----------------------------------------------------------------------")
-            sys.exit(1)
-
+        print(" Calculating energy using the DFT equations")
         if cluster:
-            E_sum, E_polar, E_vdw = calculate_energy_cluster(contents, ispromol, mol1, mol2, filename)
+            E_sum, E_polar, E_vdw = calculate_energy_cluster(contents, ispromol, supra, mol1, mol2, filename)
             for cluster_id, (e_sum, e_polar, e_vdw) in enumerate(zip(E_sum, E_polar, E_vdw)):
                 print(f" Cluster {cluster_id} energies / kJ/mol")
                 print(" E_sum   :        {:.8f}".format(e_sum))
@@ -119,7 +113,7 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
             print(" If your system contains sigma hole interactions, " \
             "consider using the clustering mode for better energy accuracy")
             print("----------------------------------------------------------------------")
-            E_sum, E_polar, E_vdw = calculate_energy_single(contents, ispromol)
+            E_sum, E_polar, E_vdw = calculate_energy_single(contents, ispromol, supra)
             print(f" NCI energies / kJ/mol")
             print(" E_sum   :        {:.8f}".format(E_sum))
             print(" E_polar :        {:.8f}".format(E_polar))
