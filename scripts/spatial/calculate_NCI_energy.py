@@ -1,7 +1,7 @@
 #!/bin/python
 import sys
 import numpy as np
-from spatial.sigma_hole_detection import find_sigma_bond
+from spatial.sigma_bond_detection import find_sigma_bond
 from spatial.DIVIDE import find_CP_Atom_matches
 
 """Critically also need to find the place to add the sigma hole detection to use a different energy equation 

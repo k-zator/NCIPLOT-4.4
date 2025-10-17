@@ -1895,10 +1895,10 @@ contains
                   sum_rhon_vol(1) = sum_rhon_vol(1) + sum(abs(crho(i1, j1, k1)/100))*xinc(1)*xinc(2)*xinc(3)/8
                   sum_rhon_vol(2) = sum_rhon_vol(2) + sum(abs(crho(i1, j1, k1)/100)**1.5) &
                                     *xinc(1)*xinc(2)*xinc(3)/8
-                  sum_rhon_vol(3) = sum_rhon_vol(3) + sum(abs(crho(i1, j1, k1)/100)**(0.333)) &
+                  sum_rhon_vol(3) = sum_rhon_vol(3) + sum(abs(crho(i1, j1, k1)/100)**2) &
                                     *xinc(1)*xinc(2)*xinc(3)/8
-                  sum_rhon_vol(4) = sum_rhon_vol(4) + sum(abs(crho(i1, j1, k1)/ &
-                                                              100)**(0.666))*xinc(1)*xinc(2)*xinc(3)/8
+                  sum_rhon_vol(4) = sum_rhon_vol(4) + sum(abs(crho(i1, j1, k1)/100)**2.5) &
+                                    *xinc(1)*xinc(2)*xinc(3)/8
                   sum_rhon_vol(5) = sum_rhon_vol(5) + sum(abs(crho(i1, j1, k1)/100)**3) &
                                     *xinc(1)*xinc(2)*xinc(3)/8
                   sum_rhon_vol(6) = sum_rhon_vol(6) + sum(abs(crho(i1, j1, k1)/100)**(1.333)) &
@@ -1920,10 +1920,10 @@ contains
                   sum_signrhon_vol(1) = sum_signrhon_vol(1) + signlambda_2*sum(abs(crho(i1, j1, k1)/100))*xinc(1)*xinc(2)*xinc(3)/8
                   sum_signrhon_vol(2) = sum_signrhon_vol(2) + signlambda_2*sum(abs(crho(i1, j1, k1)/100)**1.5) &
                                         *xinc(1)*xinc(2)*xinc(3)/8
-                  sum_signrhon_vol(3) = sum_signrhon_vol(3) + signlambda_2*sum(abs(crho(i1, j1, k1)/100)**(0.333)) &
+                  sum_signrhon_vol(3) = sum_signrhon_vol(3) + signlambda_2*sum(abs(crho(i1, j1, k1)/100)**2) &
                                         *xinc(1)*xinc(2)*xinc(3)/8
-                  sum_signrhon_vol(4) = sum_signrhon_vol(4) + signlambda_2*sum(abs(crho(i1, j1, k1)/ &
-                                                                                   100)**(0.666))*xinc(1)*xinc(2)*xinc(3)/8
+                  sum_signrhon_vol(4) = sum_signrhon_vol(4) + signlambda_2*sum(abs(crho(i1, j1, k1)/100)**2.5) &
+                                        *xinc(1)*xinc(2)*xinc(3)/8
                   sum_signrhon_vol(5) = sum_signrhon_vol(5) + signlambda_2*sum(abs(crho(i1, j1, k1)/100)**3) &
                                         *xinc(1)*xinc(2)*xinc(3)/8
                   sum_signrhon_vol(6) = sum_signrhon_vol(6) + signlambda_2*sum(abs(crho(i1, j1, k1)/100)**(1.333)) &
@@ -2027,10 +2027,10 @@ contains
                             sum_rhon_vol(1) = sum_rhon_vol(1) + abs(crho(i1, j1, k1)/100)*xinc(1)*xinc(2)*xinc(3)/8
                             sum_rhon_vol(2) = sum_rhon_vol(2) + abs(crho(i1, j1, k1)/100)**1.5 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
-                            sum_rhon_vol(3) = sum_rhon_vol(3) + abs(crho(i1, j1, k1)/100)**(0.333) &
+                            sum_rhon_vol(3) = sum_rhon_vol(3) + abs(crho(i1, j1, k1)/100)**2 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
-                            sum_rhon_vol(4) = sum_rhon_vol(4) + abs(crho(i1, j1, k1)/ &
-                                                              100)**(0.666)*xinc(1)*xinc(2)*xinc(3)/8
+                            sum_rhon_vol(4) = sum_rhon_vol(4) + abs(crho(i1, j1, k1)/100)**2.5 &
+                                    *xinc(1)*xinc(2)*xinc(3)/8
                             sum_rhon_vol(5) = sum_rhon_vol(5) + abs(crho(i1, j1, k1)/100)**3 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
                             sum_rhon_vol(6) = sum_rhon_vol(6) + abs(crho(i1, j1, k1)/100)**(1.333) &
@@ -2047,10 +2047,10 @@ contains
                             sum_signrhon_vol(1) = sum_signrhon_vol(1) + (crho(i1, j1, k1)/100)*xinc(1)*xinc(2)*xinc(3)/8
                             sum_signrhon_vol(2) = sum_signrhon_vol(2) + signlambda_2*(abs(crho(i1, j1, k1)/100)**1.5) &
                                         *xinc(1)*xinc(2)*xinc(3)/8
-                            sum_signrhon_vol(3) = sum_signrhon_vol(3) + signlambda_2*(abs(crho(i1, j1, k1)/100)**(0.333)) &
+                            sum_signrhon_vol(3) = sum_signrhon_vol(3) + signlambda_2*(abs(crho(i1, j1, k1)/100)**2) &
                                         *xinc(1)*xinc(2)*xinc(3)/8
-                            sum_signrhon_vol(4) = sum_signrhon_vol(4) + signlambda_2*(abs(crho(i1, j1, k1)/ &
-                                                                                   100)**(0.666))*xinc(1)*xinc(2)*xinc(3)/8
+                            sum_signrhon_vol(4) = sum_signrhon_vol(4) + signlambda_2*(abs(crho(i1, j1, k1)/100)**2.5) &
+                                        *xinc(1)*xinc(2)*xinc(3)/8
                             sum_signrhon_vol(5) = sum_signrhon_vol(5) + signlambda_2*(abs(crho(i1, j1, k1)/100)**3) &
                                         *xinc(1)*xinc(2)*xinc(3)/8
                             sum_signrhon_vol(6) = sum_signrhon_vol(6) + signlambda_2*(abs(crho(i1, j1, k1)/100)**(1.333)) &
@@ -2083,8 +2083,8 @@ contains
       ! n = 1, 1.5, 2, 2.5, 3, 4/3, 5/3: sum of rho^n
       sum_rhon_area(1) = sum_rhon_area(1) + sum(abs(crho(i1, j1, k1)/100))*a*b/8
       sum_rhon_area(2) = sum_rhon_area(2) + sum(abs(crho(i1, j1, k1)/100)**1.5)*a*b/8
-      sum_rhon_area(3) = sum_rhon_area(3) + sum(abs(crho(i1, j1, k1)/100)**(0.333))*a*b/8
-      sum_rhon_area(4) = sum_rhon_area(4) + sum(abs(crho(i1, j1, k1)/100)**(0.666))*a*b/8
+      sum_rhon_area(3) = sum_rhon_area(3) + sum(abs(crho(i1, j1, k1)/100)**2)*a*b/8
+      sum_rhon_area(4) = sum_rhon_area(4) + sum(abs(crho(i1, j1, k1)/100)**2.5)*a*b/8
       sum_rhon_area(5) = sum_rhon_area(5) + sum(abs(crho(i1, j1, k1)/100)**3)*a*b/8
       sum_rhon_area(6) = sum_rhon_area(6) + sum(abs(crho(i1, j1, k1)/100)**(1.3333333)) &
                          *a*b/8
