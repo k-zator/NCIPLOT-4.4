@@ -43,7 +43,7 @@ program nciplot
    integer, parameter :: mfiles = 100 ! max number of geometry files
 
    integer :: aux
-   real*8 :: value
+   real*8 :: value, rrresult
 
    character*(mline) :: argv(2), oname
    integer :: argc, nfiles, ifile, idx, istat, ntotal
@@ -910,7 +910,13 @@ do while (.true.)
       if (istat /= 0) call error('nciplot', 'could not allocate memory for grad', faterr)
       allocate (crho(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
       if (istat /= 0) call error('nciplot', 'could not allocate memory for signed density', faterr)
-   
+      allocate(rmbox_coarse(0:nstep(1)-2, 0:nstep(2)-2, 0:nstep(3)-2), stat=istat)
+      if (istat /= 0) call error('nciplot', 'could not allocate memory for rmbox_coarse (cube case)', faterr)
+      rmbox_coarse = .false.
+      allocate(crho_n(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1, 1:nfiles), stat=istat)
+      if (istat /= 0) call error('nciplot', 'could not allocate memory for crho_n (cube case)', faterr)
+      crho_n = 0d0
+
       do it1=0,nstep(1)-1 ! first we initialise the reduced gradient array to 100d0
          do it2=0,nstep(2)-1
             do it3=0,nstep(3)-1
@@ -952,7 +958,6 @@ do while (.true.)
       
                call RS(3,3,hess,heigs,0,hvecs,wk1,wk2,istat) ! matrix diagonalisation defined in props
                crho(it1,it2,it3) = sign(real(m(1)%cubedens(it1,it2,it3)),real(heigs(2)))*100.d0
-               
                else ! Should be 0.0
                   cgrad(it1,it2,it3) = 100d0
                   crho(it1,it2,it3) = 0d0
@@ -961,6 +966,24 @@ do while (.true.)
          end do
       end do
 
+      do i = 0, nstep(1) - 2
+         do j = 0, nstep(2) - 2
+            do k = 0, nstep(3) - 2
+               i1 = (/i, i + 1/)
+               j1 = (/j, j + 1/)
+               k1 = (/k, k + 1/)
+               ! Mask out boxes where any vertex fails the cutoff
+               if (any(abs(crho(i1, j1, k1)/100d0) > rhocut) .or. any(cgrad(i1, j1, k1) > dimcut)) then
+                  rmbox_coarse(i, j, k) = .true.
+               end if
+            end do
+         end do
+      end do
+
+      do molid = 1, nfiles
+         crho_n(:, :, :, molid) = crho(:, :, :)
+      end do
+      
       call system_clock(count=c3)
       if (flag_dens_neg) then
          write (uout, 137) 
@@ -968,9 +991,8 @@ do while (.true.)
 
    end if ! isnotcube
    !===============================================================================!
-   ! Write .dat file.
+   ! Cross-check of parameter use in NCI region restriction
    !===============================================================================!
-   !REAL :: aux
    aux = 1
    do k = 0, nstep(3) - 1
       do j = 0, nstep(2) - 1
@@ -1198,6 +1220,8 @@ do while (.true.)
                cgrad(i, j, k) = abs(cgrad(i, j, k))
                dimgrad = cgrad(i, j, k)
                rho = crho(i, j, k)/100d0
+               ! AND overwrite crho density variable to make sure the correct scale is written out
+               crho(i, j, k) = crho(i, j, k)/100d0
                ! Add bounds check for rmbox_coarse access
                if (i >= ubound(rmbox_coarse,1) .or. &
                    j >= ubound(rmbox_coarse,2) .or. &
@@ -1253,7 +1277,7 @@ do while (.true.)
       write (luvmd, 115) trim(oname)//"-grad.cube"
       ! write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -rhocut*100D0, rhocut*100D0, 2, 2
       ! Neater colour isosurface plotting in VMD
-      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -4D0, 4D0, 2, 2 
+      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -0.04D0, 0.04D0, 2, 2 
       close (luvmd)
    end if
 
@@ -2027,9 +2051,11 @@ contains
                             sum_rhon_vol(1) = sum_rhon_vol(1) + abs(crho(i1, j1, k1)/100)*xinc(1)*xinc(2)*xinc(3)/8
                             sum_rhon_vol(2) = sum_rhon_vol(2) + abs(crho(i1, j1, k1)/100)**1.5 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
-                            sum_rhon_vol(3) = sum_rhon_vol(3) + abs(crho(i1, j1, k1)/100)**2 &
+                            sum_rhon_vol(3) = sum_rhon_vol(3) + 1.00D3*abs(crho(i1, j1, k1)/100)**30 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
-                            sum_rhon_vol(4) = sum_rhon_vol(4) + abs(crho(i1, j1, k1)/100)**2.5 &
+                            rrresult = merge(crho(i1, j1, k1) * exp(abs(crho(i1, j1, k1)/100.0d0)), &
+                                             0.0d0, abs(crho(i1, j1, k1)) > 1.0d-12)
+                            sum_rhon_vol(4) = sum_rhon_vol(4) + rrresult &
                                     *xinc(1)*xinc(2)*xinc(3)/8
                             sum_rhon_vol(5) = sum_rhon_vol(5) + abs(crho(i1, j1, k1)/100)**3 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
