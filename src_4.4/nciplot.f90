@@ -43,7 +43,7 @@ program nciplot
    integer, parameter :: mfiles = 100 ! max number of geometry files
 
    integer :: aux
-   real*8 :: value, rrresult
+   real*8 :: value, rrresult, rresult
 
    character*(mline) :: argv(2), oname
    integer :: argc, nfiles, ifile, idx, istat, ntotal
@@ -1195,7 +1195,7 @@ do while (.true.)
       ! Integration 
       do i= 1, nranges
          tmp_rmbox_range_tmp(:,:,:)= box_in_range(:,:,:,i)
-         call dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, &
+         call dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, cgrad, &
                   rmbox_coarse,tmp_rmbox_range_tmp, nfiles)
          write (uout, 135) srhorange(i,1), srhorange(i,2), sum_rhon_vol, sum_signrhon_vol 
          rho_range(i) = sum_rhon_vol(1)
@@ -1221,7 +1221,7 @@ do while (.true.)
                dimgrad = cgrad(i, j, k)
                rho = crho(i, j, k)/100d0
                ! AND overwrite crho density variable to make sure the correct scale is written out
-               crho(i, j, k) = crho(i, j, k)/100d0
+               ! crho(i, j, k) = crho(i, j, k)/100d0
                ! Add bounds check for rmbox_coarse access
                if (i >= ubound(rmbox_coarse,1) .or. &
                    j >= ubound(rmbox_coarse,2) .or. &
@@ -1277,7 +1277,8 @@ do while (.true.)
       write (luvmd, 115) trim(oname)//"-grad.cube"
       ! write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -rhocut*100D0, rhocut*100D0, 2, 2
       ! Neater colour isosurface plotting in VMD
-      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -0.04D0, 0.04D0, 2, 2 
+      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -4D0, 4D0, 2, 2 
+      ! write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -0.04D0, 0.04D0, 2, 2 
       close (luvmd)
    end if
 
@@ -2020,12 +2021,13 @@ contains
 
    end subroutine dataGeom 
 
-   subroutine dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, rmbox_coarse,rmpoint_coarse, nfiles)
+   subroutine dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, cgrad, rmbox_coarse,rmpoint_coarse, nfiles)
       real*8, intent(out) :: sum_rhon_vol(9)
       real*8, intent(out) :: sum_signrhon_vol(7)
       real*8, intent(in) :: xinc(3)
       integer, intent(in) :: nstep(3)
       real*8, intent(in) :: crho(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
+                            cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
                             crho_n(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1, 1:nfiles)
       logical, intent(in) :: rmbox_coarse(0:nstep(1) - 2, 0:nstep(2) - 2, 0:nstep(3) - 2)
       logical, intent(in) :: rmpoint_coarse(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1)
@@ -2051,11 +2053,10 @@ contains
                             sum_rhon_vol(1) = sum_rhon_vol(1) + abs(crho(i1, j1, k1)/100)*xinc(1)*xinc(2)*xinc(3)/8
                             sum_rhon_vol(2) = sum_rhon_vol(2) + abs(crho(i1, j1, k1)/100)**1.5 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
-                            sum_rhon_vol(3) = sum_rhon_vol(3) + 1.00D3*abs(crho(i1, j1, k1)/100)**30 &
+                            sum_rhon_vol(3) = sum_rhon_vol(3) + abs(crho(i1, j1, k1)/100)**2 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
-                            rrresult = merge(crho(i1, j1, k1) * exp(abs(crho(i1, j1, k1)/100.0d0)), &
-                                             0.0d0, abs(crho(i1, j1, k1)) > 1.0d-12)
-                            sum_rhon_vol(4) = sum_rhon_vol(4) + rrresult &
+                            ! sum_rhon_vol(4) = sum_rhon_vol(4) + abs(crho(i1,j1,k1)/100)**(1.5) / sqrt(1.0d0 + abs(crho(i1,j1,k1))) &
+                            sum_rhon_vol(4) = sum_rhon_vol(3) + abs(crho(i1, j1, k1)/100)**2.5 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
                             sum_rhon_vol(5) = sum_rhon_vol(5) + abs(crho(i1, j1, k1)/100)**3 &
                                     *xinc(1)*xinc(2)*xinc(3)/8

@@ -78,7 +78,9 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15):
         local_grad = gradient[neighbors_idx[idx]]
         if gradient[point_idx] <= np.min(local_grad):  # Using <= instead of == for numerical stability
             critical_points.append([coordinates[point_idx], density[point_idx], gradient[point_idx]])
-            
+
+    critical_points = filter_close_CPs(critical_points, min_distance=0.6)
+
     print(" Number of critical points found: ", len(critical_points))
     return critical_points
 
@@ -103,8 +105,17 @@ def write_CPs_xyz(CPs, filename):
         f.write("Critical points for the complex NCI clustering of interactions\n")
         for i, cp in enumerate(CPs, 1):
             coords = cp[0] if isinstance(cp[0], (list, np.ndarray)) else cp
+            coords = np.array(coords) * bohr_to_angstrom
             f.write(f"CP{i}   {coords[0]:.6f}   {coords[1]:.6f}   {coords[2]:.6f}\n")
 
+def filter_close_CPs(CPs, min_distance=0.6):
+    """Remove CPs that are closer than min_distance to each other."""
+    coords = np.array([cp[0] if isinstance(cp[0], (list, np.ndarray)) else cp for cp in CPs])
+    keep = []
+    for i, c in enumerate(coords):
+        if all(np.linalg.norm(c - coords[j]) >= min_distance for j in keep):
+            keep.append(i)
+    return [CPs[i] for i in keep]
 
 def find_CP_Atom_matches(CPs, mol1, mol2, ispromol):
     """Given the CPs' positions, find the atom-atom interactions they correspond to
