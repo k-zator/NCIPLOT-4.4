@@ -43,7 +43,7 @@ program nciplot
    integer, parameter :: mfiles = 100 ! max number of geometry files
 
    integer :: aux
-   real*8 :: value, rrresult, rresult
+   real*8 :: value
 
    character*(mline) :: argv(2), oname
    integer :: argc, nfiles, ifile, idx, istat, ntotal
@@ -925,20 +925,37 @@ do while (.true.)
          end do
       end do
       flag_dens_neg = .FALSE.
-      do it1=3,nstep(1)-3 ! since numerical differentiation reaches point +/- 2
-         do it2=3,nstep(2)-3 ! in the following we use the numerical differentiation to compute Hessian on a grid
-            do it3=3,nstep(3)-3
+
+      do it1=0,nstep(1)-1
+         do it2=0,nstep(2)-1
+            do it3=0,nstep(3)-1
+               if (m(1)%cubedens(it1,it2,it3) < 0d0) then
+                  flag_dens_neg = .TRUE.
+                  m(1)%cubedens(it1,it2,it3) = abs(m(1)%cubedens(it1,it2,it3))
+               end if
+               crho(it1,it2,it3) = m(1)%cubedens(it1,it2,it3)*100d0
+            end do
+         end do
+      end do
+
+      do it1=2,nstep(1)-3 ! since numerical differentiation reaches point +/- 2
+         do it2=2,nstep(2)-3 ! in the following we use the numerical differentiation to compute Hessian on a grid
+            do it3=2,nstep(3)-3
                if (m(1)%cubedens(it1,it2,it3) .LT. 0.0) then ! Density is negative, a messagge appear and values are 0.0
                   flag_dens_neg = .TRUE.
                   m(1)%cubedens(it1,it2,it3)=abs(m(1)%cubedens(it1,it2,it3))
                end if
 
-               if ((m(1)%cubedens(it1,it2,it3) .LE. rhocut)) then!.and. (m(1)%cubedens(it1,it2,it3)  .GT. 1d-6)) THEN ! we restrict computation of gradient & hessian to low density regions
-                  cgrad(it1,it2,it3) = (SQRT(                                                               &   ! ||grad_p(r)||
-                  ((m(1)%cubedens(it1+1,it2,it3) - m(1)%cubedens(it1-1,it2,it3)) / (2.*m(1)%xinc0(1)))**2.d0 + &   ! grad_x
-                  ((m(1)%cubedens(it1,it2+1,it3) - m(1)%cubedens(it1,it2-1,it3)) / (2.*m(1)%xinc0(2)))**2.d0 + &   ! grad_y
-                  ((m(1)%cubedens(it1,it2,it3+1) - m(1)%cubedens(it1,it2,it3-1)) / (2.*m(1)%xinc0(3)))**2.d0 )) &  ! grad_z
-                  /((2.d0*((3.d0*pi**2.d0)**(1.d0/3.d0)))*(m(1)%cubedens(it1,it2,it3)**(4.d0/3.d0)))                   ! (2*((3*pi**2)**1/3) * (p(r)**4/3))
+               if (m(1)%cubedens(it1,it2,it3) .LE. rhocut) then
+                  ! 4th-order central differences for grad (requires +/-2 and matches loop bounds)
+                  grad(1) = (-m(1)%cubedens(it1+2,it2,  it3) + 8d0*m(1)%cubedens(it1+1,it2,  it3) &
+                             -8d0*m(1)%cubedens(it1-1,it2,  it3) +      m(1)%cubedens(it1-2,it2,  it3)) / (12d0*m(1)%xinc0(1))
+                  grad(2) = (-m(1)%cubedens(it1,  it2+2,it3) + 8d0*m(1)%cubedens(it1,  it2+1,it3) &
+                             -8d0*m(1)%cubedens(it1,  it2-1,it3) +      m(1)%cubedens(it1,  it2-2,it3)) / (12d0*m(1)%xinc0(2))
+                  grad(3) = (-m(1)%cubedens(it1,  it2,  it3+2) + 8d0*m(1)%cubedens(it1,  it2,  it3+1) &
+                             -8d0*m(1)%cubedens(it1,  it2,  it3-1) +      m(1)%cubedens(it1,  it2,  it3-2)) / (12d0*m(1)%xinc0(3))
+                  grad2 = dot_product(grad, grad)
+                  cgrad(it1,it2,it3) = sqrt(grad2)/(const*(m(1)%cubedens(it1,it2,it3)**(4.d0/3.d0)))               ! (2*((3*pi**2)**1/3) * (p(r)**4/3))
                   
                   hess(1,1) = ((m(1)%cubedens(it1+2,it2,it3)) - 2*(m(1)%cubedens(it1+1,it2,it3)) + (m(1)%cubedens(it1,it2,it3)) ) &
                                  /(m(1)%xinc0(1) * m(1)%xinc0(1)) 
@@ -960,7 +977,7 @@ do while (.true.)
                crho(it1,it2,it3) = sign(real(m(1)%cubedens(it1,it2,it3)),real(heigs(2)))*100.d0
                else ! Should be 0.0
                   cgrad(it1,it2,it3) = 100d0
-                  crho(it1,it2,it3) = 0d0
+                  crho(it1,it2,it3) = m(1)%cubedens(it1,it2,it3)*100d0
                end if
             end do
          end do
@@ -972,8 +989,10 @@ do while (.true.)
                i1 = (/i, i + 1/)
                j1 = (/j, j + 1/)
                k1 = (/k, k + 1/)
-               ! Mask out boxes where any vertex fails the cutoff
-               if (any(abs(crho(i1, j1, k1)/100d0) > rhocut) .or. any(cgrad(i1, j1, k1) > dimcut)) then
+               ! Consistent with WFN/promol: remove only if all 8 vertices fail
+               if (count( (abs(crho(i1, j1, k1)/100d0) > rhocut) .or. &
+                         ( (cgrad(i1, j1, k1) < 100d0) .and. ((cgrad(i1, j1, k1) > dimcut) .or. &
+                         (cgrad(i1, j1, k1) < 0d0)) ) ) == 8) then
                   rmbox_coarse(i, j, k) = .true.
                end if
             end do
@@ -982,6 +1001,8 @@ do while (.true.)
 
       do molid = 1, nfiles
          crho_n(:, :, :, molid) = crho(:, :, :)
+         ! For cube input, no fragment decomposition: use unsigned density only
+         crho_n(:, :, :, molid) = abs(crho(:, :, :))
       end do
       
       call system_clock(count=c3)
@@ -1031,12 +1052,6 @@ do while (.true.)
    end if
    if (lugc > 0) call write_cube_header(lugc, 'grad_cube', '3d plot, reduced density gradient')
    if (ludc > 0) call write_cube_header(ludc, 'dens_cube', '3d plot, density')
-
-   !===============================================================================!
-   ! Write the complete cube files. Commented out in favour of writing only intergation region
-   !===============================================================================!
-   ! if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
-   ! if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
 
    call system_clock(count=c4)
    write (*, "(A, F6.2, A)") ' Time for writing outputs = ', real(dble(c4 - c3)/dble(cr), kind=8), ' secs'
@@ -1234,7 +1249,7 @@ do while (.true.)
             end do
          end do
       end do
-      if (ludc > 0) call write_cube_body(ludc, nstep, crho)          ! density
+      if (ludc > 0) call write_cube_body(ludc, nstep, crho/100d0)    ! density NOW RE-RESCALED TO A.U.
       if (lugc > 0) call write_cube_body(lugc, nstep, cgrad)         ! RDG
       call system_clock(count=c4)
       write (*, "(A, F6.2, A)") ' Time for writing outputs = ', real(dble(c4 - c3)/dble(cr), kind=8), ' secs'
@@ -1277,8 +1292,8 @@ do while (.true.)
       write (luvmd, 115) trim(oname)//"-grad.cube"
       ! write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -rhocut*100D0, rhocut*100D0, 2, 2
       ! Neater colour isosurface plotting in VMD
-      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -4D0, 4D0, 2, 2 
-      ! write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -0.04D0, 0.04D0, 2, 2 
+      ! write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -4D0, 4D0, 2, 2 
+      write (luvmd, 116) nn0 - 1, nnf - 1, isordg, 2, 2, 2, -0.04D0, 0.04D0, 2, 2 
       close (luvmd)
    end if
 
@@ -2055,8 +2070,7 @@ contains
                                     *xinc(1)*xinc(2)*xinc(3)/8
                             sum_rhon_vol(3) = sum_rhon_vol(3) + abs(crho(i1, j1, k1)/100)**2 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
-                            ! sum_rhon_vol(4) = sum_rhon_vol(4) + abs(crho(i1,j1,k1)/100)**(1.5) / sqrt(1.0d0 + abs(crho(i1,j1,k1))) &
-                            sum_rhon_vol(4) = sum_rhon_vol(3) + abs(crho(i1, j1, k1)/100)**2.5 &
+                            sum_rhon_vol(4) = sum_rhon_vol(4) + abs(crho(i1, j1, k1)/100)**2.5 &
                                     *xinc(1)*xinc(2)*xinc(3)/8
                             sum_rhon_vol(5) = sum_rhon_vol(5) + abs(crho(i1, j1, k1)/100)**3 &
                                     *xinc(1)*xinc(2)*xinc(3)/8

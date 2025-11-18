@@ -45,9 +45,9 @@ def calculate_energy_cluster(output, ispromol, supra, mol1, mol2, filename):
                 E_polar = -1064.0465*np.array(NCI_index_dict["Strong"][3])
                 E_vdw = -1064.0465*np.array(NCI_index_dict["Weak"][3]) - 5.8970227
             else: 
-                # do note, this has to be extensive and the only good enough equation is the supramolecular one
+                # this has to be extensive and the only good enough equation is the SUPRA (incl. L7/CIM13) one
                 E_polar =  -183.88803*NCI_index_dict["Strong"][0]
-                E_vdw = (NCI_index_dict["Weak"][0] + NCI_index_dict["Weak"][1])*756.96106
+                E_vdw = -183.88803*NCI_index_dict["Weak"][0] + 756.96106*NCI_index_dict["Weak"][1]
 
         else: #WFN
             if sigma_hole:
