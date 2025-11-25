@@ -1,10 +1,6 @@
 NCIPLOT is a program for revealing non covalent interactions based on the reduced density gradient. Please cite:
-  * NCIPLOT-4.0: DOI: https://pubs.acs.org/doi/10.1021/acs.jctc.0c00063
-  
-For more information and updates, visit our webpage:
-  http://www.lct.jussieu.fr/pagesperso/contrera/index-nci.html
-  
-Developer of the 4.0 version: Roberto A. Boto
+  * NCIPLOT-4.4: DOI: https://hal.science/hal-04943402v1/
+Developer: Katarzyna J. Zator
 
 * Overview
 
@@ -29,7 +25,7 @@ cube-format cube files and VMD scripts for the direct visualization of the resul
 * Compilation
 
 To install nciplot, unpack or clone the contents of the distribution and cd
-into the src_nciplot_4.0/ subdirectory. Change the Makefile.inc to suit your
+into the src_4.4/ subdirectory. Change the Makefile.inc to suit your
 compiler and flags, and do:
 
 make mrproper
@@ -70,19 +66,18 @@ As a brief outline, the accepted keywords in this version are:
    ! - RTHRES
    ! - LIGAND
    ! - RADIUS
-   ! - INTERMOLECULAR
+   ! - CG2FG
    ! - ONAME
    ! - INCREMENTS
    ! - OUTPUT
-   ! - FRAGMENT
-   ! - CUTOFFS
-   ! - CUTPLOT
-   ! - ISORDG
-   ! - INTERCUT
-   ! - DGRID
-   ! - RANGE
-   ! - CG2FG
+   ! - RDG_CUTOFF
+   ! - DENS_CUTOFF
+   ! - INTERMOLECULAR
+   ! - INTERMOL_CUTOFF
    ! - INTEGRATE
+   ! - RANGE
+   ! - NCICLUSTER
+   ! - NCIENERGY
    ! - FINE
    ! - ULTRAFINE
    ! - COARSE
