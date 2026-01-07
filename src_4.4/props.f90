@@ -33,7 +33,7 @@ module props
 
 contains
 
-   subroutine calcprops_wfn(xinit, xinc, n, mol, nmol, rho, grad, cheig)
+   subroutine calcprops_wfn(xinit, xinc, n, mol, nmol, rho, grad, cheig, csteric)
       use reader
       use tools_io
       use tools_math
@@ -42,7 +42,7 @@ contains
       real*8, intent(in) :: xinit(3), xinc(3)
       integer, intent(in) :: n(3), nmol
       type(molecule) :: mol(nmol)
-      real*8, dimension(n(1), n(2), n(3)), intent(out) :: rho, grad
+      real*8, dimension(n(1), n(2), n(3)), intent(out) :: rho, grad, csteric
       real*8, dimension(n(1), n(2), n(3)), intent(out) :: cheig
       real*8, allocatable, dimension(:, :) :: dx, dy, dz, d2, gg
       real*8, allocatable, dimension(:) :: tp, maxc, rhoaux
@@ -62,6 +62,7 @@ contains
       rho = 0d0
       grad = 0d0
       cheig = 0d0
+      csteric = 0d0
 
       nmcent = 0
       do i = 1, nmol
@@ -245,6 +246,7 @@ contains
                rho(ip, jp, kp) = sign(rhoaux(ip), heigs(2))*100d0
                grad(ip, jp, kp) = sqrt(grad2)/(const*rhoaux(ip)**fothirds)
                cheig(ip, jp, kp) = heigs(2)
+               csteric(ip, jp, kp) = grad2/(rhoaux(ip)*8.D0)
                !write(*,*)  rhoaux(ip)
             enddo
          enddo ! k = 0, n(3)-1
@@ -255,7 +257,7 @@ contains
 
    end subroutine calcprops_wfn
 
-   subroutine calcprops_id_wfn(xinit, xinc, n, mol, nmol, molid, rho, grad, cheig)
+   subroutine calcprops_id_wfn(xinit, xinc, n, mol, nmol, molid, rho, grad, cheig, csteric)
       use reader
       use tools_io
       use tools_math
@@ -264,7 +266,7 @@ contains
       real*8, intent(in) :: xinit(3), xinc(3)
       integer, intent(in) :: n(3), nmol, molid
       type(molecule) :: mol(nmol)
-      real*8, dimension(n(1), n(2), n(3)), intent(out) :: rho, grad
+      real*8, dimension(n(1), n(2), n(3)), intent(out) :: rho, grad, csteric
       real*8, dimension(n(1), n(2), n(3)), intent(out) :: cheig
       real*8, allocatable, dimension(:, :) :: dx, dy, dz, d2, gg
       real*8, allocatable, dimension(:) :: tp, maxc, rhoaux
@@ -284,6 +286,8 @@ contains
       rho = 0d0
       grad = 0d0
       cheig = 0d0
+      csteric = 0d0
+
       m = molid
       nmcent = 0
       nmcent = max(nmcent, mol(m)%n)
@@ -457,6 +461,7 @@ contains
                rho(ip, jp, kp) = rhoaux(ip)
                grad(ip, jp, kp) = sqrt(grad2)/(const*rhoaux(ip)**fothirds)
                cheig(ip, jp, kp) = heigs(2)
+               csteric(ip, jp, kp) = grad2/(rhoaux(ip)*8.D0)
             enddo
             
             ! deallocate thread-private arrays

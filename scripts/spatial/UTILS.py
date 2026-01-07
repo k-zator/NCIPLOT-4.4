@@ -10,9 +10,10 @@ def process_cube(filename):
     nx, ny, nz = densarray.shape
     Mrhos = np.zeros((nx, ny, nz, 5))
     Mrhos[:, :, :, :3] = denspts
-    Mrhos[:, :, :, 3] = densarray
+    Mrhos[:, :, :, 3] = densarray*100 # convert to same units as in main nci program
     Mrhos[:, :, :, 4] = gradarray
     Mrhos = Mrhos.reshape(densarray.size, 5)
+
     # X_iso = Mrhos[Mrhos[:,4] <= s+1e-6] # just the isosurface
     grid = (nx, ny, nz)
     # and voxel for integration normalisation
@@ -21,7 +22,7 @@ def process_cube(filename):
     # and specifically monomeric densities
     # _, _, densarray1, _  = read_cube(f"{filename}-dens1.cube")
     # _, _, densarray2, _  = read_cube(f"{filename}-dens2.cube")
-    return Mrhos, densarray, header, grid, dvol #, densarray1, densarray2
+    return Mrhos, densarray*100, header, grid, dvol #, densarray1, densarray2
 
 def read_cube(filename, verbose=False):
     """Reads in a cube file and returns grid information, atomic position, and a 3D array of cube values.
@@ -114,7 +115,7 @@ def write_cube(filename, cl, X, labels, header, grid, verbose=False, parallel=Fa
 
     def write_file(suffix, data):
         """Write a single cube file"""
-        output_file = f"{filename}-cl{cl}-{suffix}.cube"
+        output_file = f"{filename}-cl{cl+1}-{suffix}.cube"
         
         # Reshape the flattened data back to 3D grid
         data_3d = data.reshape(grid)
@@ -141,11 +142,10 @@ def write_cube(filename, cl, X, labels, header, grid, verbose=False, parallel=Fa
                          ('dens', values[:, 1].flatten())])
     else:
         write_file('grad', values[:, 0].flatten())
-        write_file('dens', values[:, 1].flatten())
+        write_file('dens', values[:, 1].flatten()/100) # Convert back to original units
 
     if verbose:
-        print(f"  Wrote cube files {filename}-cl{cl}-[grad/dens].cube")
-
+        print(f"  Wrote cube files {filename}-cl{cl+1}-[grad/dens].cube")
 
 def write_cube_select(filename, cl, X, labels, header, grid, verbose=False):
     """ Write simplified cube file corresponding to only a segment of space for each cluster."""
@@ -193,7 +193,7 @@ def write_cube_select(filename, cl, X, labels, header, grid, verbose=False):
         selected_grad[xi - x_min, yi - y_min, zi - z_min] = grad[xi, yi, zi]
 
     def write_file(suffix, values):
-        output_file = f"{filename}-cl{cl}-{suffix}.cube"
+        output_file = f"{filename}-cl{cl+1}-{suffix}.cube"
         with open(output_file, 'w') as f:
             f.writelines(new_header)
             # Write in cube format: 6 values per line
@@ -205,7 +205,7 @@ def write_cube_select(filename, cl, X, labels, header, grid, verbose=False):
     write_file("dens", selected_dens)
     write_file("grad", selected_grad)
     if verbose:
-        print(f"  Wrote cube files {filename}-cl{cl}-[grad/dens].cube")
+        print(f"  Wrote cube files {filename}-cl{cl+1}-[grad/dens].cube")
 
 def write_vmd(filename, labels, isovalue, verbose=False, c3=False):
     """ Write vmd script file for each cluster.

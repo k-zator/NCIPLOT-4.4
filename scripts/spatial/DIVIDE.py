@@ -47,7 +47,7 @@ def group_grad_to_grid(coordinates, gradient, a, gradient_threshold):
     
     return possible_minima
 
-def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15):
+def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True, mol1=None, mol2=None):
     """
     Find critical points using the gradient information in the matrix.
 
@@ -80,8 +80,23 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15):
             critical_points.append([coordinates[point_idx], density[point_idx], gradient[point_idx]])
 
     critical_points = filter_close_CPs(critical_points, min_distance=0.6)
-
     print(" Number of critical points found: ", len(critical_points))
+
+    # Print CPs, their densities, gradients and neighboring atoms
+    if ispromol:
+        mol1_coords, mol1_names = read_xyz(mol1)
+        mol2_coords, mol2_names = read_xyz(mol2)
+    else:  # WFN case - read from .xyz files generated from .wfn
+        mol1_coords, mol1_names = read_wfn(mol1)
+        mol2_coords, mol2_names = read_wfn(mol2)
+    print(" Densities at critical points: ")
+    for i, cp in enumerate(critical_points):
+        dists1 = np.linalg.norm(mol1_coords - cp[0], axis=1)
+        dists2 = np.linalg.norm(mol2_coords - cp[0], axis=1)
+        idx1 = np.argmin(dists1)
+        idx2 = np.argmin(dists2)
+        print(f"CP{i} Neighbours: {[mol1_names[int(idx1)], mol2_names[int(idx2)]]}, Density: {cp[1]/100:.6f}, Gradient: {cp[2]:.6f}")
+
     return critical_points
 
 def get_unique_dimeric_CPs(CP_dimer, CP_monomer_1, CP_monomer_2):
@@ -117,36 +132,40 @@ def filter_close_CPs(CPs, min_distance=0.6):
             keep.append(i)
     return [CPs[i] for i in keep]
 
+def read_xyz(filename):
+    with open(filename, 'r') as f:
+        lines = f.readlines()[2:]
+        coords = []
+        names = []
+        for i, line in enumerate(lines):
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            coords.append([float(x) for x in parts[1:4]])
+            names.append(parts[0]+str(i+1))
+        return np.array(coords, dtype=float), names
+    
+def read_wfn(filename):
+    with open(filename, 'r') as f:
+        lines = f.readlines()[2:]
+        coords = []
+        names = []
+        for line in lines:
+            parts = line.split()
+            if len(parts) > 6:
+                if parts[2] == '(CENTRE':
+                    coords.append([float(x)*bohr_to_angstrom for x in parts[4:7]])
+                    names.append(parts[0] + parts[1])
+        return np.array(coords, dtype=float), names
+
 def find_CP_Atom_matches(CPs, mol1, mol2, ispromol):
     """Given the CPs' positions, find the atom-atom interactions they correspond to
         Returns a list of lists: [CP_position, mol1_atom_idx, mol2_atom_idx] """
-    
-    def read_xyz(filename):
-        with open(filename, 'r') as f:
-            lines = f.readlines()[2:]
-            coords = []
-            for line in lines:
-                parts = line.split()
-                if len(parts) < 4:
-                    continue
-                coords.append([float(x) for x in parts[1:4]])
-            return np.array(coords, dtype=float)
-        
-    def read_wfn(filename):
-        with open(filename, 'r') as f:
-            lines = f.readlines()[2:]
-            coords = []
-            for line in lines:
-                parts = line.split()
-                if len(parts) > 6:
-                    if parts[2] == '(CENTRE':
-                        coords.append([float(x)*bohr_to_angstrom for x in parts[4:7]])
-            return np.array(coords, dtype=float)
         
     if ispromol:
         cp_coords = read_xyz(CPs)
-        mol1_coords = read_xyz(mol1)
-        mol2_coords = read_xyz(mol2)
+        mol1_coords, _ = read_xyz(mol1)
+        mol2_coords, _ = read_xyz(mol2)
     else:  # WFN case - read from .xyz files generated from .wfn
         cp_coords = read_xyz(CPs)
         mol1_coords = read_wfn(mol1)

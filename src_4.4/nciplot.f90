@@ -35,7 +35,7 @@ program nciplot
 
    ! python ones
    integer(c_int) :: py_status
-   character(kind=c_char, len=1000) :: command_ncicluster
+   character(kind=c_char, len=10000) :: command_ncicluster
    character(kind=c_char, len=10000) :: command_ncienergy
    integer :: iounit_p1
    logical :: doclustering, ncienergy, isverbose, supra
@@ -57,7 +57,7 @@ program nciplot
    ! logical units
    integer :: lugc, ludc, luvmd, ludat, lurc
    ! cubes
-   real*8, allocatable, dimension(:, :, :) :: crho, cgrad
+   real*8, allocatable, dimension(:, :, :) :: crho, cgrad, csteric
    ! ligand, intermolecular keyword
    logical :: ligand, inter, intra
    real*8 :: rthres
@@ -75,7 +75,7 @@ program nciplot
    ! intermolecularity cutoff
    real*8 :: rhoparam
    ! properties of rho
-   real*8 :: rho, grad(3), dimgrad, grad2, hess(3, 3)
+   real*8 :: rho, grad(3), dimgrad, grad2, hess(3, 3), esteric
    integer, parameter :: mfrag = 100 ! max number of fragments
    real*8 :: rhom(mfrag)
    ! eispack
@@ -97,7 +97,7 @@ program nciplot
    integer :: indx(3), nstep_coarse(3)
    real*8, allocatable :: fginc(:)
    real*8 :: xinc_coarse(3)
-   real*8, allocatable, dimension(:, :, :) :: tmp_crho, tmp_cgrad
+   real*8, allocatable, dimension(:, :, :) :: tmp_crho, tmp_cgrad, tmp_csteric
    logical :: flag, firstgrid
    logical, allocatable :: rmbox_coarse(:, :, :), tmp_rmbox(:, :, :), rmpoint_coarse(:,:,:)
    integer :: cr, c0, c1, c2, c3, c4, c5, c6
@@ -648,6 +648,8 @@ do while (.true.)
          if (istat /= 0) call error('nciplot', 'could not allocate memory for density cube', faterr)
          allocate (cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
          if (istat /= 0) call error('nciplot', 'could not allocate memory for grad', faterr)
+         allocate (csteric(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         if (istat /= 0) call error('nciplot', 'could not allocate memory for steric', faterr)
          xinc_coarse = xinc ! initialize just in case
          nstep_coarse = nstep ! initialize just in case
       end if
@@ -667,6 +669,9 @@ do while (.true.)
          if (allocated(tmp_cgrad)) deallocate (tmp_cgrad)
          allocate (tmp_cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
          call move_alloc(tmp_cgrad, cgrad)
+         if (allocated(tmp_csteric)) deallocate (tmp_csteric)
+         allocate (tmp_csteric(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         call move_alloc(tmp_csteric, csteric)
       end if
 
    !===============================================================================!
@@ -714,6 +719,7 @@ do while (.true.)
                         crho(i, j, k) = 100d0
                         cgrad(i, j, k) = 100d0
                         cheig(i, j, k) = 0d0
+                        csteric(i, j, k) = 100d0
                         cycle
                      end if
    20                continue
@@ -728,6 +734,8 @@ do while (.true.)
                   rho = max(rho, 1d-30)
                   grad2 = dot_product(grad, grad)
                   dimgrad = sqrt(grad2)/(const*rho**(4.D0/3.D0))
+                  ! k-zator addition: Weizsacker kinetic energy / steric energy as a repulsion measure
+                  esteric = grad2/(rho*8.D0)
                   intra = inter .and. (any(rhom(1:nfrag) >= sum(rhom(1:nfrag))*rhoparam))
                   if (intra) dimgrad = -dimgrad !checks for interatomic, intra is true iff inter and condition hold
                   !$omp critical (cubewrite)
@@ -735,9 +743,11 @@ do while (.true.)
                   if (rho .gt. 1d-30) then
                      crho(i, j, k) = sign(rho, heigs(2))*100.D0
                      cgrad(i, j, k) = dimgrad
+                     csteric(i, j, k) =  esteric
                   else
                      crho(i, j, k) = 100d0
                      cgrad(i, j, k) = 100d0
+                     csteric(i, j, k) = 100d0
                   end if
 
                   do molid = 1, nfiles
@@ -756,7 +766,7 @@ do while (.true.)
       else  ! wavefunction densities
          if (.not. inter) then
             call system_clock(count=c1)
-            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig)
+            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig, csteric)
             !$omp parallel do private (x,rho,grad,hess,heigs,hvecs,wk1,wk2,istat,grad2,&
             !$omp dimgrad,intra,rhom,flag,indx,i0,j0,k0) schedule(dynamic)
             do k = 0, nstep(3) - 1
@@ -793,6 +803,7 @@ do while (.true.)
                            crho(i, j, k) = 100d0
                            cgrad(i, j, k) = 100d0
                            cheig(i, j, k) = 0d0
+                           csteric(i, j, k) = 100d0
                            cycle
                         end if
    21                   continue
@@ -805,10 +816,10 @@ do while (.true.)
          else !very experimental wfn intermolecular
             call system_clock(count=c1)
             do molid = 1, nfiles
-               call calcprops_id_wfn(xinit, xinc, nstep, m, nfiles, molid, crho, cgrad, cheig)
+               call calcprops_id_wfn(xinit, xinc, nstep, m, nfiles, molid, crho, cgrad, cheig, csteric)
                crho_n(:, :, :, molid) = crho(:, :, :)
             end do
-            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig)
+            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig, csteric)
             do k = 0, nstep(3) - 1
                do j = 0, nstep(2) - 1
                   do i = 0, nstep(1) - 1
@@ -839,6 +850,7 @@ do while (.true.)
                            crho(i, j, k) = 100d0
                            cgrad(i, j, k) = 100d0
                            cheig(i, j, k) = 0d0
+                           csteric(i, j, k) = 100d0
                            cycle
                         end if
    22                   continue
@@ -916,11 +928,14 @@ do while (.true.)
       allocate(crho_n(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1, 1:nfiles), stat=istat)
       if (istat /= 0) call error('nciplot', 'could not allocate memory for crho_n (cube case)', faterr)
       crho_n = 0d0
+      allocate (csteric(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
+      if (istat /= 0) call error('nciplot', 'could not allocate memory for steric (cube case)', faterr)
 
       do it1=0,nstep(1)-1 ! first we initialise the reduced gradient array to 100d0
          do it2=0,nstep(2)-1
             do it3=0,nstep(3)-1
                cgrad(it1,it2,it3) = 100d0
+               csteric(it1,it2,it3) = 0d0
             end do
          end do
       end do
@@ -956,7 +971,8 @@ do while (.true.)
                              -8d0*m(1)%cubedens(it1,  it2,  it3-1) +      m(1)%cubedens(it1,  it2,  it3-2)) / (12d0*m(1)%xinc0(3))
                   grad2 = dot_product(grad, grad)
                   cgrad(it1,it2,it3) = sqrt(grad2)/(const*(m(1)%cubedens(it1,it2,it3)**(4.d0/3.d0)))               ! (2*((3*pi**2)**1/3) * (p(r)**4/3))
-                  
+                  csteric(it1,it2,it3) = grad2/(m(1)%cubedens(it1,it2,it3)*8d0)
+
                   hess(1,1) = ((m(1)%cubedens(it1+2,it2,it3)) - 2*(m(1)%cubedens(it1+1,it2,it3)) + (m(1)%cubedens(it1,it2,it3)) ) &
                                  /(m(1)%xinc0(1) * m(1)%xinc0(1)) 
                   hess(2,2) = ((m(1)%cubedens(it1,it2+2,it3)) - 2*(m(1)%cubedens(it1,it2+1,it3)) + &
@@ -977,6 +993,7 @@ do while (.true.)
                crho(it1,it2,it3) = sign(real(m(1)%cubedens(it1,it2,it3)),real(heigs(2)))*100.d0
                else ! Should be 0.0
                   cgrad(it1,it2,it3) = 100d0
+                  csteric(it1,it2,it3)= 0d0
                   crho(it1,it2,it3) = m(1)%cubedens(it1,it2,it3)*100d0
                end if
             end do
@@ -1211,7 +1228,7 @@ do while (.true.)
       do i= 1, nranges
          tmp_rmbox_range_tmp(:,:,:)= box_in_range(:,:,:,i)
          call dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, cgrad, &
-                  rmbox_coarse,tmp_rmbox_range_tmp, nfiles)
+                  rmbox_coarse,tmp_rmbox_range_tmp, nfiles, csteric)
          write (uout, 135) srhorange(i,1), srhorange(i,2), sum_rhon_vol, sum_signrhon_vol 
          rho_range(i) = sum_rhon_vol(1)
       enddo
@@ -1274,6 +1291,7 @@ do while (.true.)
    if (allocated(cheig)) deallocate (cheig)
    if (allocated(cgrad)) deallocate (cgrad)
    if (allocated(crho_n)) deallocate (crho_n)
+   if (allocated(csteric)) deallocate (csteric)
    if (ludat > 0) close (ludat)
 
    !===============================================================================!
@@ -1308,15 +1326,19 @@ do while (.true.)
        ! Close the file
        close(iounit_p1)
 
-      write(command_ncicluster, '(A,A,A,A,F5.2,A,F5.3,A,F5.3)') trim(adjustl(nciplot_home)), 'scripts/NCICLUSTER.py', & 
+      write(command_ncicluster, '(A,A,A,A,F5.2,A,L1,A,F5.3,A,F5.3,A,F5.3,A,F5.3,A,F5.3,A,F5.3,A,A,A,A)') &
+      trim(adjustl(nciplot_home)), 'scripts/NCICLUSTER.py', & 
          ' tmp_ncicluster_file', & 
-         ' --isovalue ', & 
-         dimcut, &
-         ' --outer ', & 
-         srhorange(3, 2), &          
-         ' --inner ', & 
-         srhorange(3, 1)
-
+         ' --isovalue ', dimcut, &
+         ' --ispromol ', ispromol, &
+         ' --r11 ', srhorange(1, 1), &          
+         ' --r12 ', srhorange(1, 2), &
+         ' --r21 ', srhorange(2, 1), &          
+         ' --r22 ', srhorange(2, 2), &
+         ' --r31 ', srhorange(3, 1), &          
+         ' --r32 ', srhorange(3, 2), &
+         ' --mol1 ', filenames(1), &
+         ' --mol2 ', filenames(2)
       py_status = system(trim(adjustl(command_ncicluster)))
       ! Check the return py_status
       select case (py_status)
@@ -1387,6 +1409,7 @@ do while (.true.)
    if (allocated(tmp_crho_n)) deallocate (tmp_crho_n)
    if (allocated(tmp_cheigs)) deallocate (tmp_cheigs)
    if (allocated(tmp_cgrad)) deallocate (tmp_cgrad)
+   if (allocated(tmp_csteric)) deallocate (tmp_csteric)
    if (allocated(fginc)) deallocate (fginc)
 
    call tictac('End')
@@ -1506,7 +1529,7 @@ do while (.true.)
           ' n=4/3           :', 3X, F15.8, /, &
           ' n=5/3           :', 3X, F15.8, /, &
           '----------------------------------------------------------------------')
-
+          
 120 format(/'-----------------------------------------------------'/ &
            '      Calculation details:'/ &
            '-----------------------------------------------------')
@@ -1559,7 +1582,7 @@ do while (.true.)
           ' n=4/3           :', 3X, F15.8, /, &
           ' n=5/3           :', 3X, F15.8, /, &
           ' Volume          :', 3X, F15.8, /, &
-          ' rho-sum_i rho_i :', 3X, F15.8, / &
+          ' Steric_energy   :', 3X, F15.8, /, &
           '---------------------------------------------------------------------', /, &
           ' Integration  over the volumes of sign(lambda2)(rho)^n             '/, &
           '---------------------------------------------------------------------', /, &
@@ -2036,13 +2059,15 @@ contains
 
    end subroutine dataGeom 
 
-   subroutine dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, cgrad, rmbox_coarse,rmpoint_coarse, nfiles)
+   subroutine dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, cgrad, rmbox_coarse, &
+                              rmpoint_coarse, nfiles, csteric)
       real*8, intent(out) :: sum_rhon_vol(9)
       real*8, intent(out) :: sum_signrhon_vol(7)
       real*8, intent(in) :: xinc(3)
       integer, intent(in) :: nstep(3)
       real*8, intent(in) :: crho(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
                             cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
+                            csteric(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
                             crho_n(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1, 1:nfiles)
       logical, intent(in) :: rmbox_coarse(0:nstep(1) - 2, 0:nstep(2) - 2, 0:nstep(3) - 2)
       logical, intent(in) :: rmpoint_coarse(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1)
@@ -2080,7 +2105,8 @@ contains
                                     *xinc(1)*xinc(2)*xinc(3)/8
                             ! n = 0: volume of cubes
                             sum_rhon_vol(8) = sum_rhon_vol(8) + xinc(1)*xinc(2)*xinc(3)/8
-
+                            ! steric energy
+                            sum_rhon_vol(9) = sum_rhon_vol(9) + csteric(i1, j1, k1)*xinc(1)*xinc(2)*xinc(3)/8
                             !sign_lambda2 x rho
                             signrho = crho(i, j, k)
                             signlambda_2 = sign(1d0, signrho)

@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 
 def options_dict(options):
-    opt_dict = {"isovalue": 1.0, "outer": 0.2, "inner": 0.02, "verbose": False}
+    opt_dict = {"isovalue": 1.0, "ispromol": True, "r11": -0.2, "r12": -0.02, "r21": -0.02, "r22": 0.02, "r31": 0.02, "r32": 0.2, "verbose": False}
 
     for i, op in enumerate(options[0::2]):
         if op == "--help":
@@ -9,8 +9,8 @@ def options_dict(options):
                 "To run NCICLUSTER do: ./ncicluster.py input_names [OPTIONS]",
                 "Options:",
                 "  --isovalue i       set the isovalue to i",
-                "  --outer out        set the outer limit of integration range, default 0.2",
-                "  --inner in         set the inner limit of integration range, default 0.02",
+                "  --r11 out          set the outer limit of integration range, default -0.2",
+                "  --r12 in           set the inner limit of integration range, default -0.02",
                 "  --mol1 m1          input molecular geometry, molecule1",
                 "  --mol2 m2          input molecular geometry, molecule2",
                 "  -v V               choose verbose mode, default is False",
@@ -21,10 +21,25 @@ def options_dict(options):
         else:
             if op == "--isovalue":
                 opt_dict["isovalue"] = float(options[2 * i + 1])
-            elif op == "--outer":
-                opt_dict["outer"] = float(options[2 * i + 1])
-            elif op == "--inner":
-                opt_dict["inner"] = float(options[2 * i + 1])
+            elif op == "--ispromol":
+                if options[2 * i + 1] == "F":
+                    opt_dict["ispromol"] = False
+            elif op == "--r11":
+                opt_dict["r11"] = float(options[2 * i + 1])
+            elif op == "--r12":
+                opt_dict["r12"] = float(options[2 * i + 1])
+            elif op == "--r21":
+                opt_dict["r21"] = float(options[2 * i + 1])
+            elif op == "--r22":
+                opt_dict["r22"] = float(options[2 * i + 1])
+            elif op == "--r31":
+                opt_dict["r31"] = float(options[2 * i + 1])
+            elif op == "--r32":
+                opt_dict["r32"] = float(options[2 * i + 1])
+            elif op == "--mol1":
+                opt_dict["mol1"] = options[2 * i + 1]
+            elif op == "--mol2":
+                opt_dict["mol2"] = options[2 * i + 1]
             elif op == "-v":
                 if options[2 * i + 1] == "True":
                     opt_dict["verbose"] = True

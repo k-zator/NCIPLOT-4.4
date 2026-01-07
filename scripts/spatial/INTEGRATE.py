@@ -1,6 +1,7 @@
 import numpy as np
 
-def integrate_NCI_cluster(gradarray, densarray, grid, dvol, labels, cluster_id, l_large=0.2, l_small=0.02, rhoparam=2, promol=True):
+def integrate_NCI_cluster(gradarray, densarray, grid, dvol, labels, cluster_id,rhoparam=2, promol=True,
+                          r11=-0.2, r12=-0.02, r21=-0.02, r22=0.02, r31=0.02, r32=0.2):
     """
     Range integration matching original fortran logic, but with cluster pre-selection.
     
@@ -57,9 +58,9 @@ def integrate_NCI_cluster(gradarray, densarray, grid, dvol, labels, cluster_id, 
     dens_norm = dens_vals / 100
     
     # Region masks
-    mask_polar = (dens_norm > -l_large) & (dens_norm < -l_small)
-    mask_vdw   = (dens_norm >= -l_small) & (dens_norm <= l_small)
-    mask_rep   = (dens_norm > l_small) & (dens_norm < l_large)
+    mask_polar = (dens_norm > r11) & (dens_norm < r12)
+    mask_vdw   = (dens_norm >= r21) & (dens_norm <= r22)
+    mask_rep   = (dens_norm > r31) & (dens_norm < r32)
     
     def region_integral(region_mask):
         vals = dens_vals[region_mask]
