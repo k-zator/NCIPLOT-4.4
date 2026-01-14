@@ -1,7 +1,6 @@
 import numpy as np
 
-def integrate_NCI_cluster(gradarray, densarray, grid, dvol, labels, cluster_id,rhoparam=2, promol=True,
-                          r11=-0.2, r12=-0.02, r21=-0.02, r22=0.02, r31=0.02, r32=0.2):
+def integrate_NCI_cluster(gradarray, densarray, grid, dvol, labels, cluster_id,rhoparam=2, promol=True, rhorange=[-0.2, -0.02]):
     """
     Range integration matching original fortran logic, but with cluster pre-selection.
     
@@ -58,16 +57,16 @@ def integrate_NCI_cluster(gradarray, densarray, grid, dvol, labels, cluster_id,r
     dens_norm = dens_vals / 100
     
     # Region masks
-    mask_polar = (dens_norm > r11) & (dens_norm < r12)
-    mask_vdw   = (dens_norm >= r21) & (dens_norm <= r22)
-    mask_rep   = (dens_norm > r31) & (dens_norm < r32)
+    masks = []
+    for r in range(len(rhorange)):
+        masks.append((dens_norm > rhorange[r][0]) & (dens_norm < rhorange[r][1]))
     
     def region_integral(region_mask):
         vals = dens_vals[region_mask]
         return np.array([(np.power(np.abs(vals/100), p) * dvol / 8).sum() for p in integral_powers])
     
-    sum_rhon_vol_polar = region_integral(mask_polar)
-    sum_rhon_vol_vdw   = region_integral(mask_vdw)
-    sum_rhon_vol_rep   = region_integral(mask_rep)
-    
-    return np.array([sum_rhon_vol_polar, sum_rhon_vol_vdw, sum_rhon_vol_rep])
+    sum_rhon_vol = []
+    for m in masks:
+        sum_rhon_vol.append(region_integral(m))
+
+    return np.array(sum_rhon_vol)

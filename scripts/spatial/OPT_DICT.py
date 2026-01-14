@@ -1,7 +1,8 @@
 #! /usr/bin/env python3
+import numpy as np
 
 def options_dict(options):
-    opt_dict = {"isovalue": 1.0, "ispromol": True, "r11": -0.2, "r12": -0.02, "r21": -0.02, "r22": 0.02, "r31": 0.02, "r32": 0.2, "verbose": False}
+    opt_dict = {"isovalue": 1.0, "ispromol": True, "range": [-0.2, -0.02], "verbose": False}
 
     for i, op in enumerate(options[0::2]):
         if op == "--help":
@@ -9,10 +10,8 @@ def options_dict(options):
                 "To run NCICLUSTER do: ./ncicluster.py input_names [OPTIONS]",
                 "Options:",
                 "  --isovalue i       set the isovalue to i",
-                "  --r11 out          set the outer limit of integration range, default -0.2",
-                "  --r12 in           set the inner limit of integration range, default -0.02",
-                "  --mol1 m1          input molecular geometry, molecule1",
-                "  --mol2 m2          input molecular geometry, molecule2",
+                "  --range r          set the outer limit of integration range, default [-0.2, -0.02]",
+                "  --mol m            input molecular geometry, molecule1",
                 "  -v V               choose verbose mode, default is False",
                 "  --help             display this help and exit",
                 sep="\n",
@@ -24,22 +23,16 @@ def options_dict(options):
             elif op == "--ispromol":
                 if options[2 * i + 1] == "F":
                     opt_dict["ispromol"] = False
-            elif op == "--r11":
-                opt_dict["r11"] = float(options[2 * i + 1])
-            elif op == "--r12":
-                opt_dict["r12"] = float(options[2 * i + 1])
-            elif op == "--r21":
-                opt_dict["r21"] = float(options[2 * i + 1])
-            elif op == "--r22":
-                opt_dict["r22"] = float(options[2 * i + 1])
-            elif op == "--r31":
-                opt_dict["r31"] = float(options[2 * i + 1])
-            elif op == "--r32":
-                opt_dict["r32"] = float(options[2 * i + 1])
-            elif op == "--mol1":
-                opt_dict["mol1"] = options[2 * i + 1]
-            elif op == "--mol2":
-                opt_dict["mol2"] = options[2 * i + 1]
+            elif op == "--range":
+                if "range" in opt_dict.keys():
+                    opt_dict["range"] += [float(options[2 * i + 1])]
+                else:
+                    opt_dict["range"] = [float(options[2 * i + 1])]
+            elif op == "--mol":
+                if "mol" in opt_dict.keys():
+                    opt_dict["mol"] += [options[2 * i + 1]]
+                else:
+                    opt_dict["mol"] = [options[2 * i + 1]]
             elif op == "-v":
                 if options[2 * i + 1] == "True":
                     opt_dict["verbose"] = True
@@ -50,7 +43,9 @@ def options_dict(options):
                         "{} is not a valid option for -v. Try True or False,".format(options[2*i+1]))
             else:
                 raise ValueError("{} is not a valid option".format(op))
-
+    #reshape range to be a 2 x n array
+    opt_dict["range"] = np.array(opt_dict["range"]).reshape(-1, 2)
+    
     return opt_dict
 
 def options_energy_calc(options):

@@ -91,6 +91,9 @@ program nciplot
    integer :: natommax, igroup, natom
    integer, allocatable, dimension(:, :) :: group
    real*8, allocatable, dimension(:, :) :: xinitat, xmaxat, nstepat
+   ! ncicluster variable progression
+   character(len=32) :: tmp_real, tmp_logical
+   logical :: tmp_ispromol
 
    ! Initializing multilevel grids
    integer :: ind_g, ng
@@ -1319,26 +1322,34 @@ do while (.true.)
    ! NCICLUSTER python script integration. Author: Katarzyna Zator
    !===============================================================================!
    if(doclustering) then 
-       iounit_p1 = 501
-       open(unit=iounit_p1, file='tmp_ncicluster_file', status='replace', action='write')
-       ! Write the strings to the file
-       write(iounit_p1, '(A)') trim(adjustl(oname))
-       ! Close the file
-       close(iounit_p1)
+      iounit_p1 = 501
+      open(unit=iounit_p1, file='tmp_ncicluster_file', status='replace', action='write')
+      ! Write the strings to the file
+      write(iounit_p1, '(A)') trim(adjustl(oname))
+      ! Close the file
+      close(iounit_p1)
 
-      write(command_ncicluster, '(A,A,A,A,F5.2,A,L1,A,F5.3,A,F5.3,A,F5.3,A,F5.3,A,F5.3,A,F5.3,A,A,A,A)') &
-      trim(adjustl(nciplot_home)), 'scripts/NCICLUSTER.py', & 
-         ' tmp_ncicluster_file', & 
-         ' --isovalue ', dimcut, &
-         ' --ispromol ', ispromol, &
-         ' --r11 ', srhorange(1, 1), &          
-         ' --r12 ', srhorange(1, 2), &
-         ' --r21 ', srhorange(2, 1), &          
-         ' --r22 ', srhorange(2, 2), &
-         ' --r31 ', srhorange(3, 1), &          
-         ' --r32 ', srhorange(3, 2), &
-         ' --mol1 ', filenames(1), &
-         ' --mol2 ', filenames(2)
+      tmp_ispromol = ispromol
+      write(tmp_real, '(F5.2)') dimcut
+      write(tmp_logical, '(L1)') tmp_ispromol
+      command_ncicluster = trim(adjustl(nciplot_home)) // 'scripts/NCICLUSTER.py' // &
+                        ' tmp_ncicluster_file --isovalue ' // trim(adjustl(tmp_real)) // &
+                        ' --ispromol ' // trim(adjustl(tmp_logical))
+      if (allocated(filenames)) then
+         do k = 1, size(filenames)
+            command_ncicluster = trim(command_ncicluster) // ' --mol ' // trim(adjustl(filenames(k)))
+         end do
+      end if
+      do i = 1, size(srhorange, 1)
+         do j = 1, size(srhorange, 2)
+            write(tmp_real, '(F5.2)') srhorange(i, j)
+            if (j == 1) then
+               command_ncicluster = trim(command_ncicluster) // ' --range ' // trim(adjustl(tmp_real))
+            else
+               command_ncicluster = trim(command_ncicluster) // ' --range ' // trim(adjustl(tmp_real))
+            end if
+         end do
+      end do
       py_status = system(trim(adjustl(command_ncicluster)))
       ! Check the return py_status
       select case (py_status)

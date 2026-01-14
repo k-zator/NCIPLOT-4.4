@@ -47,7 +47,7 @@ def group_grad_to_grid(coordinates, gradient, a, gradient_threshold):
     
     return possible_minima
 
-def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True, mol1=None, mol2=None):
+def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True, mol=None):
     """
     Find critical points using the gradient information in the matrix.
 
@@ -84,18 +84,41 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True
 
     # Print CPs, their densities, gradients and neighboring atoms
     if ispromol:
-        mol1_coords, mol1_names = read_xyz(mol1)
-        mol2_coords, mol2_names = read_xyz(mol2)
+        mol_coords = []; mol_names = []
+        for m in mol:
+            c, n = read_xyz(m)
+            mol_coords.append(c)
+            mol_names.append(n)
     else:  # WFN case - read from .xyz files generated from .wfn
-        mol1_coords, mol1_names = read_wfn(mol1)
-        mol2_coords, mol2_names = read_wfn(mol2)
+        mol_coords = []; mol_names = []
+        for m in mol:
+            c, n = read_wfn(m)
+            mol_coords.append(c)
+            mol_names.append(n)
     print(" Densities at critical points: ")
     for i, cp in enumerate(critical_points):
-        dists1 = np.linalg.norm(mol1_coords - cp[0], axis=1)
-        dists2 = np.linalg.norm(mol2_coords - cp[0], axis=1)
-        idx1 = np.argmin(dists1)
-        idx2 = np.argmin(dists2)
-        print(f"CP{i} Neighbours: {[mol1_names[int(idx1)], mol2_names[int(idx2)]]}, Density: {cp[1]/100:.6f}, Gradient: {cp[2]:.6f}")
+        #iterate over molecules to find nearest atoms
+        min_dist1 = float('inf')
+        idx = -1
+        for mol_idx, (mol_c, mol_n) in enumerate(zip(mol_coords, mol_names)):
+            dists = np.linalg.norm(mol_c - cp[0]*bohr_to_angstrom, axis=1)
+            local_min_idx = np.argmin(dists)
+            #if dist is lower than before, find the name using the index
+            if dists[local_min_idx] < min_dist1:
+                name1 = mol_n[local_min_idx]
+                min_dist1 = dists[local_min_idx]
+                idx = mol_idx
+        #find the second closest atom from another molecule
+        min_dist2 = float('inf')
+        for mol_idx, (mol_c, mol_n) in enumerate(zip(mol_coords, mol_names)):
+            if mol_idx == idx:
+                continue
+            dists = np.linalg.norm(mol_c - cp[0]*bohr_to_angstrom, axis=1)
+            local_min_idx = np.argmin(dists)
+            if dists[local_min_idx] < min_dist2:
+                name2 = mol_n[local_min_idx]
+                min_dist2 = dists[local_min_idx]
+        print(f"CP{i+1} Neighbours: {name1, name2}, Distances: {min_dist1:.4f}, {min_dist2:.4f}, Density: {cp[1]/100:.4f}")
 
     return critical_points
 
