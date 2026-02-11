@@ -60,28 +60,28 @@ directory. The PDF manual is simply NCIPLOT_MANUAL.pdf
 which is shipped with the code. Only the usage of the code
 suggested in the manual is recommended.
 
-As a brief outline, the accepted keywords in this version are:
-   !===============================================================================!
-   ! Read optional keywords.
-   ! Accepted keywords in this version:
-   ! - RTHRES
-   ! - LIGAND
-   ! - RADIUS
-   ! - CG2FG
-   ! - ONAME
-   ! - INCREMENTS
-   ! - OUTPUT
-   ! - RDG_CUTOFF
-   ! - DENS_CUTOFF
-   ! - INTERMOLECULAR
-   ! - INTERMOL_CUTOFF
-   ! - INTEGRATE
-   ! - RANGE
-   ! - NCICLUSTER
-   ! - NCIENERGY
-   ! - FINE
-   ! - ULTRAFINE
-   ! - COARSE
-   !===============================================================================!
+As a brief outline, the accepted keywords in this version are:<br />
+   !===============================================================================!<br />
+   ! Read optional keywords.<br />
+   ! Accepted keywords in this version:<br />
+   ! - RTHRES<br />
+   ! - LIGAND<br />
+   ! - RADIUS<br />
+   ! - CG2FG<br />
+   ! - ONAME<br />
+   ! - INCREMENTS<br />
+   ! - OUTPUT<br />
+   ! - RDG_CUTOFF<br />
+   ! - DENS_CUTOFF<br />
+   ! - INTERMOLECULAR<br />
+   ! - INTERMOL_CUTOFF<br />
+   ! - INTEGRATE<br />
+   ! - RANGE<br />
+   ! - NCICLUSTER<br />
+   ! - NCIENERGY<br />
+   ! - FINE<br />
+   ! - ULTRAFINE<br />
+   ! - COARSE<br />
+   !===============================================================================!<br />
 
 Have fun!
