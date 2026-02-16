@@ -94,6 +94,9 @@ program nciplot
    ! ncicluster variable progression
    character(len=32) :: tmp_real, tmp_logical
    logical :: tmp_ispromol
+   character(len=64) :: charges_arg
+   integer :: charges(2) = (/0, 0/)   ! initialize in declaration
+
 
    ! Initializing multilevel grids
    integer :: ind_g, ng
@@ -299,6 +302,7 @@ program nciplot
    ! - DENSWEIGHT
    ! - CLUSTERING
    ! - NCIENERGY
+   ! - CHARGES
    ! - SUPRA
    ! - CG2FG
    ! - FINE
@@ -343,6 +347,11 @@ do while (.true.)
 
       case ("VERBOSE")
          isverbose = .true.
+
+      case ("CHARGES")
+         read (line, *) charges(1), charges(2)
+         if (istat /= 0) call error('nciplot', 'Error reading CHARGES values -&
+            format should be "CHARGES q1 q2 ... qn"', warning)
 
       case ("DENSWEIGHT")
          if (.not. all(m(:)%ifile == ifile_wfn)) then
@@ -1369,6 +1378,8 @@ do while (.true.)
    !===============================================================================!
    ! NCIENERGY python script integration. Author: Katarzyna Zator
    !===============================================================================!
+   write(charges_arg, '(I0,",",I0)') charges(1), charges(2)
+
    if (ncienergy) then
       iounit_p1 = 501
       open(unit=iounit_p1, file='tmp_ncienergy_file', status='replace', action='write')
@@ -1376,7 +1387,7 @@ do while (.true.)
       write(iounit_p1, '(A)') trim(adjustl(oname))
       ! Close the file
       close(iounit_p1)
-      write(command_ncienergy, '(A,A,A,A,A,A,F5.1,A,F5.2,A,F5.2,A,F5.2,A,L1,A,L1,A,L1,A,L1,A,A,A,A)') &
+      write(command_ncienergy, '(A,A,A,A,A,A,F5.1,A,F5.2,A,F5.2,A,F5.2,A,L1,A,L1,A,L1,A,L1,A,A,A,A,A,A)') &
       trim(adjustl(nciplot_home)), 'scripts/NCIENERGY.py', & 
       ' tmp_ncienergy_file', &
       ' --oname ', oname, &
@@ -1389,7 +1400,8 @@ do while (.true.)
       ' --clustering ', doclustering, &
       ' --supra ', supra, &
       ' --mol1 ', filenames(1), &
-      ' --mol2 ', filenames(2)
+      ' --mol2 ', filenames(2), &
+      ' --total_charges ', charges_arg
       py_status = system(trim(adjustl(command_ncienergy)))
       ! Check the return py_status
       select case (py_status)

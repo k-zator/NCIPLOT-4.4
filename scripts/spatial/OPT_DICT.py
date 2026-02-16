@@ -50,7 +50,7 @@ def options_dict(options):
 
 def options_energy_calc(options):
     opt_dict = {"isovalue": 1.0, "outer": 0.2, "inner": 0.02, "gamma": 0.85, "intermol": True, "ispromol": True, 
-                "cluster": False, "supra": False, "mol1": None, "mol2": None, "oname": "output"}
+                "cluster": False, "supra": False, "mol1": None, "mol2": None, "oname": "output", "total_charges": [0, 0]}
     for i, op in enumerate(options[0::2]):
         if op == "--help":
             print(
@@ -67,6 +67,7 @@ def options_energy_calc(options):
                 "  --supra s          determine if supramolecular mode in on, default False",
                 "  --mol1 m1          input molecular geometry, molecule1",
                 "  --mol2 m2          input molecular geometry, molecule2",
+                "  --total_charges tc  set total charges for mol1 and mol2, default [0,0]",
                 "                     (mol1 and mol2 must be set if clustering is True)",
                 "  --help             display this help and exit",
                 sep="\n",
@@ -103,6 +104,8 @@ def options_energy_calc(options):
                 opt_dict["mol1"] = options[2 * i + 1]
             elif op == "--mol2":
                 opt_dict["mol2"] = options[2 * i + 1]
+            elif op == "--total_charges":
+                opt_dict["total_charges"] = [int(x) for x in options[2 * i + 1].split(",")]
             else:
                 raise ValueError("{} is not a valid option".format(op))
     return opt_dict

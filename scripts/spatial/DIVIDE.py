@@ -1,10 +1,12 @@
-import numpy as np
-from scipy.spatial import KDTree
+from pathlib import Path
+import numpy as np # type: ignore
+from scipy.spatial import KDTree # type: ignore
+from spatial.charge_aggregate import create_dimer_descriptors, aggregate_system_descriptors
 bohr_to_angstrom = 0.52917721067
 
 def group_grad_to_grid(coordinates, gradient, a, gradient_threshold):
     """
-    Groups coordinates into a 3D grid of spacing `a` and computes min gradient per cell.
+    Groups coordinates into a 3D grid of spacing 'a' and computes min gradient per cell.
     Parameters:
     coordinates : 3N array of (x, y, z) coordinates.
     gradient : 1N array of gradient values associated with each point.
@@ -112,12 +114,22 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True
         min_dist2 = float('inf')
         for mol_idx, (mol_c, mol_n) in enumerate(zip(mol_coords, mol_names)):
             if mol_idx == idx:
-                continue
-            dists = np.linalg.norm(mol_c - cp[0]*bohr_to_angstrom, axis=1)
-            local_min_idx = np.argmin(dists)
-            if dists[local_min_idx] < min_dist2:
-                name2 = mol_n[local_min_idx]
-                min_dist2 = dists[local_min_idx]
+                # i.e. for intramolecular interactions, but not the default use case
+                # make sure we are not picking the same atom as for min_dist1
+                dists = np.linalg.norm(mol_c - cp[0]*bohr_to_angstrom, axis=1)
+#               # exclude the shortest distance found before
+                dists[np.argmin(dists)] = float('inf')
+                local_min_idx = np.argmin(dists)
+                if dists[local_min_idx] < min_dist2:
+                    name2 = mol_n[local_min_idx]
+                    min_dist2 = dists[local_min_idx]
+            else:
+                # the default expected intermolecular case
+                dists = np.linalg.norm(mol_c - cp[0]*bohr_to_angstrom, axis=1)
+                local_min_idx = np.argmin(dists)
+                if dists[local_min_idx] < min_dist2:
+                    name2 = mol_n[local_min_idx]
+                    min_dist2 = dists[local_min_idx]
         print(f"CP{i+1} Neighbours: {name1, name2}, Distances: {min_dist1:.4f}, {min_dist2:.4f}, Density: {cp[1]/100:.4f}")
 
     return critical_points
@@ -155,7 +167,7 @@ def filter_close_CPs(CPs, min_distance=0.6):
             keep.append(i)
     return [CPs[i] for i in keep]
 
-def read_xyz(filename):
+def read_xyz(filename, elem=False):
     with open(filename, 'r') as f:
         lines = f.readlines()[2:]
         coords = []
@@ -165,10 +177,13 @@ def read_xyz(filename):
             if len(parts) < 4:
                 continue
             coords.append([float(x) for x in parts[1:4]])
-            names.append(parts[0]+str(i+1))
+            if elem:
+                names.append(parts[0])
+            else:
+                names.append(parts[0]+str(i+1))
         return np.array(coords, dtype=float), names
     
-def read_wfn(filename):
+def read_wfn(filename, elem=False):
     with open(filename, 'r') as f:
         lines = f.readlines()[2:]
         coords = []
@@ -178,7 +193,10 @@ def read_wfn(filename):
             if len(parts) > 6:
                 if parts[2] == '(CENTRE':
                     coords.append([float(x)*bohr_to_angstrom for x in parts[4:7]])
-                    names.append(parts[0] + parts[1])
+                    if elem:
+                        names.append(parts[1])
+                    else:
+                        names.append(parts[0] + parts[1])
         return np.array(coords, dtype=float), names
 
 def find_CP_Atom_matches(CPs, mol1, mol2, ispromol):
@@ -203,3 +221,62 @@ def find_CP_Atom_matches(CPs, mol1, mol2, ispromol):
         matches.append([int(idx1), int(idx2)])
 
     return matches
+
+def read_charges(mol1, mol2, ispromol):
+    """
+    Read (coords, elements, charges) for a system. Intended for xTB output where charge files contain one charge per atom.
+    Geometry (coords/elements) is taken from `mol1` and `mol2`.
+    Calculate the Coulomb energy descriptors for the system.
+
+    Returns
+    -------
+    X ndarray of aggregated descriptor values for the system.
+    """
+    #parent directory of the molecule files, the charge files should be in the same directory
+    folder_path = Path(mol1).parent
+    # basename without extension to find the corresponding charge file
+    charges1_path = folder_path / (Path(mol1).stem + "_charges.dat")
+    charges2_path = folder_path / (Path(mol2).stem + "_charges.dat")
+
+    # Parse geometry and elements for Coulomb energy and elemental encoding
+    if ispromol:
+        mol1_coords, elem1 = read_xyz(mol1, elem=True)
+        mol2_coords, elem2 = read_xyz(mol2, elem=True)
+    else:  # WFN case - read from .xyz files generated from .wfn
+        mol1_coords, elem1 = read_wfn(mol1, elem=True)
+        mol2_coords, elem2 = read_wfn(mol2, elem=True)
+
+    def get_charge(charges_path, num_atoms):
+        # Parse charges supporting the common xTB "charges" format, where the files only contain the single charge row
+        charges: list[float] = []
+        with charges_path.open("r") as f:
+            for line in f:
+                s = line.strip().split()
+                if not s:
+                    continue
+                if len(s) == 1:  # only charge
+                    charges.append(float(s[0]))
+
+        charges_arr = np.asarray(charges, dtype=float)
+
+        if charges_arr.shape[0] != num_atoms:
+            raise ValueError(
+                f"Charge count mismatch: got {charges_arr.shape[0]} charges but {num_atoms} atoms "
+                f"from charge file: {charges_path})")
+        return charges_arr
+
+    charges1 = get_charge(charges1_path, mol1_coords.shape[0])
+    charges2 = get_charge(charges2_path, mol2_coords.shape[0])
+            
+    pair_desc, _ = create_dimer_descriptors(
+                mol1_coords, elem1, charges1,
+                mol2_coords, elem2, charges2,
+                include_bessel=True,
+                n_bessel=6,
+                r_cut=10,
+                intermolecular_only=True,
+                features="6key")
+            
+    X = aggregate_system_descriptors(pair_desc, aggregation="smst")
+
+    return X

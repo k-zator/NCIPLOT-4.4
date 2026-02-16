@@ -1,11 +1,26 @@
 #!/bin/python
-import sys
-import numpy as np
+import numpy as np # type: ignore
+import onnxruntime as rt
+from spatial.charge_aggregate import calculate_charges
 from spatial.sigma_bond_detection import find_sigma_bond
-from spatial.DIVIDE import find_CP_Atom_matches
+from spatial.DIVIDE import find_CP_Atom_matches, read_charges
 
-"""Critically also need to find the place to add the sigma hole detection to use a different energy equation 
-    BUT this also requires finding the whole geometry of the complex"""
+def calculate_charge_correction(mol1, mol2, ispromol, total_charges):
+    """Wrapper function to xTB calculate charges, their aggregate descriptors,
+        and the charge-based energy correction term for the system"""
+    # 1. Calculate charges with xTB if not already present
+    calculate_charges(mol1, mol2, total_charges)
+    # 2. Read calculated charge files and compute Coulomb energy descriptors
+    X = read_charges(mol1, mol2, ispromol)
+    # 3. Compute a charge-based energy correction term for the system via a regression model
+    # Gradient-Boosting Regressor trained on NCIAtlas, S30L, L7, and CIM13 datasets
+    model_path = __file__.rsplit("/", 1)[0] + "/gbr_charge.onnx"
+    sess = rt.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+    input_name = sess.get_inputs()[0].name
+    label_name = sess.get_outputs()[0].name
+    pred_onx = sess.run([label_name], {input_name: X.reshape(1, len(X)).astype(np.float32)})
+    return pred_onx[0][0][0]
+
 
 def calculate_energy_single(output, ispromol, supra):
     """Calculate the NCI energy given the NCIPLOT output contents for single integration"""
