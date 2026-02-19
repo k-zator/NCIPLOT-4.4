@@ -1,7 +1,13 @@
-from pathlib import Path
 import numpy as np # type: ignore
 from scipy.spatial import KDTree # type: ignore
-from spatial.charge_aggregate import create_dimer_descriptors, aggregate_system_descriptors
+from spatial.charge_aggregate import (
+    create_dimer_descriptors,
+    aggregate_system_descriptors,
+    read_xyz_geometry,
+    read_wfn_geometry,
+    infer_xtb_charge_path,
+    read_xtb_charges,
+)
 bohr_to_angstrom = 0.52917721067
 
 def group_grad_to_grid(coordinates, gradient, a, gradient_threshold):
@@ -168,36 +174,20 @@ def filter_close_CPs(CPs, min_distance=0.6):
     return [CPs[i] for i in keep]
 
 def read_xyz(filename, elem=False):
-    with open(filename, 'r') as f:
-        lines = f.readlines()[2:]
-        coords = []
-        names = []
-        for i, line in enumerate(lines):
-            parts = line.split()
-            if len(parts) < 4:
-                continue
-            coords.append([float(x) for x in parts[1:4]])
-            if elem:
-                names.append(parts[0])
-            else:
-                names.append(parts[0]+str(i+1))
-        return np.array(coords, dtype=float), names
+    elements, coords = read_xyz_geometry(filename)
+    if elem:
+        names = list(elements)
+    else:
+        names = [f"{el}{i+1}" for i, el in enumerate(elements)]
+    return np.array(coords, dtype=float), names
     
 def read_wfn(filename, elem=False):
-    with open(filename, 'r') as f:
-        lines = f.readlines()[2:]
-        coords = []
-        names = []
-        for line in lines:
-            parts = line.split()
-            if len(parts) > 6:
-                if parts[2] == '(CENTRE':
-                    coords.append([float(x)*bohr_to_angstrom for x in parts[4:7]])
-                    if elem:
-                        names.append(parts[1])
-                    else:
-                        names.append(parts[0] + parts[1])
-        return np.array(coords, dtype=float), names
+    elements, coords = read_wfn_geometry(filename)
+    if elem:
+        names = list(elements)
+    else:
+        names = [f"{i+1}{el}" for i, el in enumerate(elements)]
+    return np.array(coords, dtype=float), names
 
 def find_CP_Atom_matches(CPs, mol1, mol2, ispromol):
     """Given the CPs' positions, find the atom-atom interactions they correspond to
@@ -232,11 +222,8 @@ def read_charges(mol1, mol2, ispromol):
     -------
     X ndarray of aggregated descriptor values for the system.
     """
-    #parent directory of the molecule files, the charge files should be in the same directory
-    folder_path = Path(mol1).parent
-    # basename without extension to find the corresponding charge file
-    charges1_path = folder_path / (Path(mol1).stem + "_charges.dat")
-    charges2_path = folder_path / (Path(mol2).stem + "_charges.dat")
+    charges1_path = infer_xtb_charge_path(mol1)
+    charges2_path = infer_xtb_charge_path(mol2)
 
     # Parse geometry and elements for Coulomb energy and elemental encoding
     if ispromol:
@@ -246,27 +233,16 @@ def read_charges(mol1, mol2, ispromol):
         mol1_coords, elem1 = read_wfn(mol1, elem=True)
         mol2_coords, elem2 = read_wfn(mol2, elem=True)
 
-    def get_charge(charges_path, num_atoms):
-        # Parse charges supporting the common xTB "charges" format, where the files only contain the single charge row
-        charges: list[float] = []
-        with charges_path.open("r") as f:
-            for line in f:
-                s = line.strip().split()
-                if not s:
-                    continue
-                if len(s) == 1:  # only charge
-                    charges.append(float(s[0]))
-
-        charges_arr = np.asarray(charges, dtype=float)
-
-        if charges_arr.shape[0] != num_atoms:
-            raise ValueError(
-                f"Charge count mismatch: got {charges_arr.shape[0]} charges but {num_atoms} atoms "
-                f"from charge file: {charges_path})")
-        return charges_arr
-
-    charges1 = get_charge(charges1_path, mol1_coords.shape[0])
-    charges2 = get_charge(charges2_path, mol2_coords.shape[0])
+    charges1 = read_xtb_charges(charges1_path)
+    charges2 = read_xtb_charges(charges2_path)
+    if charges1.shape[0] != mol1_coords.shape[0]:
+        raise ValueError(
+            f"Charge count mismatch: got {charges1.shape[0]} charges but {mol1_coords.shape[0]} atoms "
+            f"from charge file: {charges1_path})")
+    if charges2.shape[0] != mol2_coords.shape[0]:
+        raise ValueError(
+            f"Charge count mismatch: got {charges2.shape[0]} charges but {mol2_coords.shape[0]} atoms "
+            f"from charge file: {charges2_path})")
             
     pair_desc, _ = create_dimer_descriptors(
                 mol1_coords, elem1, charges1,

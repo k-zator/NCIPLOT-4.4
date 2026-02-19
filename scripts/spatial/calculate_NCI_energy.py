@@ -1,11 +1,26 @@
 #!/bin/python
+from pathlib import Path
 import numpy as np # type: ignore
 import onnxruntime as rt
-from spatial.charge_aggregate import calculate_charges
+from spatial.charge_aggregate import (
+    calculate_charges,
+    build_cluster_descriptors,
+    predict_cluster_sum_delta_onnx,
+    shapley_cluster_attributions_onnx,
+)
 from spatial.sigma_bond_detection import find_sigma_bond
 from spatial.DIVIDE import find_CP_Atom_matches, read_charges
 
-def calculate_charge_correction(mol1, mol2, ispromol, total_charges):
+def _charge_model_path(cluster=False, supra=False):
+    base_dir = Path(__file__).resolve().parent
+    if cluster:
+        name = "gbr_charge_cluster.onnx" if supra else "gbr_charge_small_cluster.onnx"
+    else:
+        name = "gbr_charge.onnx" if supra else "gbr_charge_small.onnx"
+    return str(base_dir / name)
+
+
+def calculate_charge_correction(mol1, mol2, ispromol, total_charges, supra=False):
     """Wrapper function to xTB calculate charges, their aggregate descriptors,
         and the charge-based energy correction term for the system"""
     # 1. Calculate charges with xTB if not already present
@@ -14,12 +29,61 @@ def calculate_charge_correction(mol1, mol2, ispromol, total_charges):
     X = read_charges(mol1, mol2, ispromol)
     # 3. Compute a charge-based energy correction term for the system via a regression model
     # Gradient-Boosting Regressor trained on NCIAtlas, S30L, L7, and CIM13 datasets
-    model_path = __file__.rsplit("/", 1)[0] + "/gbr_charge.onnx"
+    model_path = _charge_model_path(cluster=False, supra=supra)
     sess = rt.InferenceSession(model_path, providers=["CPUExecutionProvider"])
     input_name = sess.get_inputs()[0].name
     label_name = sess.get_outputs()[0].name
     pred_onx = sess.run([label_name], {input_name: X.reshape(1, len(X)).astype(np.float32)})
     return pred_onx[0][0][0]
+
+
+def calculate_charge_correction_cluster(
+    mol1,
+    mol2,
+    ispromol,
+    total_charges,
+    cp_xyz,
+    cutoff=1.0,
+    supra=False,
+    return_shapley=False,
+    shapley_n_perm=256,
+):
+        """Charge correction for clustered mode using latent-additive cluster descriptors.
+        This follows the same logic as lacr.py:
+            1) build per-cluster descriptors around CP centers,
+            2) sum descriptors across clusters,
+            3) predict one total delta with GBR ONNX.
+        """
+        calculate_charges(mol1, mol2, total_charges)
+
+        X_clusters, _ = build_cluster_descriptors(
+                mol1,
+                mol2,
+                cp_xyz,
+                cutoff=float(cutoff),
+                features="6key",
+                aggregation="smst",
+                n_bessel=6,
+                r_cut=10.0,
+                append_bias=True,
+                fallback_full_system=True,
+                ispromol=ispromol,
+        )
+
+        model_path = _charge_model_path(cluster=True, supra=supra)
+        sess = rt.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+        total_charge = predict_cluster_sum_delta_onnx(X_clusters, onnx_session=sess)
+
+        if not return_shapley:
+            return total_charge
+
+        phi, _, _ = shapley_cluster_attributions_onnx(
+            X_clusters,
+            onnx_session=sess,
+            n_perm=shapley_n_perm,
+            random_state=42,
+        )
+        return total_charge, phi
 
 
 def calculate_energy_single(output, ispromol, supra):
