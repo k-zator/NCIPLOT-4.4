@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import numpy as np # type: ignore
 from scipy.spatial import KDTree # type: ignore
 from spatial.charge_aggregate import (

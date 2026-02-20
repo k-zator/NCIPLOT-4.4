@@ -39,6 +39,7 @@ program nciplot
    character(kind=c_char, len=10000) :: command_ncienergy
    integer :: iounit_p1
    logical :: doclustering, ncienergy, isverbose, supra
+   logical :: charges_specified = .false.
 
    integer, parameter :: mfiles = 100 ! max number of geometry files
 
@@ -349,9 +350,10 @@ do while (.true.)
          isverbose = .true.
 
       case ("CHARGES")
-         read (line, *) charges(1), charges(2)
+         read (line, *, iostat=istat) charges(1), charges(2)
          if (istat /= 0) call error('nciplot', 'Error reading CHARGES values -&
             format should be "CHARGES q1 q2 ... qn"', warning)
+         if (istat == 0) charges_specified = .true.
 
       case ("DENSWEIGHT")
          if (.not. all(m(:)%ifile == ifile_wfn)) then
@@ -1379,6 +1381,7 @@ do while (.true.)
    ! NCIENERGY python script integration. Author: Katarzyna Zator
    !===============================================================================!
    write(charges_arg, '(I0,",",I0)') charges(1), charges(2)
+   write(tmp_logical, '(L1)') charges_specified
 
    if (ncienergy) then
       iounit_p1 = 501
@@ -1387,7 +1390,7 @@ do while (.true.)
       write(iounit_p1, '(A)') trim(adjustl(oname))
       ! Close the file
       close(iounit_p1)
-      write(command_ncienergy, '(A,A,A,A,A,A,F5.1,A,F5.2,A,F5.2,A,F5.2,A,L1,A,L1,A,L1,A,L1,A,A,A,A,A,A)') &
+      write(command_ncienergy, '(A,A,A,A,A,A,F5.1,A,F5.2,A,F5.2,A,F5.2,A,L1,A,L1,A,L1,A,L1,A,A,A,A,A,A,A,L1)') &
       trim(adjustl(nciplot_home)), 'scripts/NCIENERGY.py', & 
       ' tmp_ncienergy_file', &
       ' --oname ', oname, &
@@ -1401,7 +1404,8 @@ do while (.true.)
       ' --supra ', supra, &
       ' --mol1 ', filenames(1), &
       ' --mol2 ', filenames(2), &
-      ' --total_charges ', charges_arg
+      ' --total_charges ', charges_arg, &
+      ' --use_charges ', charges_specified
       py_status = system(trim(adjustl(command_ncienergy)))
       ! Check the return py_status
       select case (py_status)

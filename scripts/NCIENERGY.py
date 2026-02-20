@@ -40,6 +40,7 @@ supra    = opt_dict["supra"]
 mol1 = opt_dict["mol1"]
 mol2 = opt_dict["mol2"]
 total_charges = opt_dict["total_charges"]
+use_charges = opt_dict["use_charges"]
 # Read input file
 files = []
 with open(input_name, "r") as f:
@@ -74,7 +75,7 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
     print("----------------------------------------------------------------------")
     if ispromol:
         print(" Calculating energy using the promolecular equations")
-        use_charge_model = all(int(c) != 0 for c in total_charges)
+        use_charge_model = use_charges
         if cluster:
             if use_charge_model:
                 E_charge_correction, E_charge_clusters = calculate_charge_correction_cluster(

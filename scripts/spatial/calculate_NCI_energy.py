@@ -1,4 +1,4 @@
-#!/bin/python
+#! /usr/bin/env python3
 from pathlib import Path
 import numpy as np # type: ignore
 import onnxruntime as rt

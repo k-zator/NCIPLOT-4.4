@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import numpy as np
 
 def integrate_NCI_cluster(gradarray, densarray, grid, dvol, labels, cluster_id,rhoparam=2, promol=True, rhorange=[-0.2, -0.02]):

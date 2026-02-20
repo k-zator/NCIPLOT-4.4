@@ -1,4 +1,4 @@
-#!/bin/python
+#! /usr/bin/env python3
 import numpy as np #type: ignore
 from pathlib import Path
 import subprocess

@@ -1,6 +1,5 @@
 #! /usr/bin/env python3
 
-import copy
 import numpy as np
 bohr_to_angstrom = 0.52917721067
 
