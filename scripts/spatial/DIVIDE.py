@@ -195,13 +195,13 @@ def find_CP_Atom_matches(CPs, mol1, mol2, ispromol):
         Returns a list of lists: [CP_position, mol1_atom_idx, mol2_atom_idx] """
         
     if ispromol:
-        cp_coords = read_xyz(CPs)
+        cp_coords, _ = read_xyz(CPs)
         mol1_coords, _ = read_xyz(mol1)
         mol2_coords, _ = read_xyz(mol2)
     else:  # WFN case - read from .xyz files generated from .wfn
-        cp_coords = read_xyz(CPs)
-        mol1_coords = read_wfn(mol1)
-        mol2_coords = read_wfn(mol2)
+        cp_coords, _ = read_xyz(CPs)
+        mol1_coords, _ = read_wfn(mol1)
+        mol2_coords, _ = read_wfn(mol2)
 
     matches = []
     for cp in cp_coords:

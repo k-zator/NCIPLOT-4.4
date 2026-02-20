@@ -77,13 +77,25 @@ def calculate_charge_correction_cluster(
         if not return_shapley:
             return total_charge
 
-        phi, _, _ = shapley_cluster_attributions_onnx(
+        phi, _, baseline = shapley_cluster_attributions_onnx(
             X_clusters,
             onnx_session=sess,
             n_perm=shapley_n_perm,
             random_state=42,
         )
-        return total_charge, phi
+
+        # Shapley values are baseline-relative by construction (sum(phi) = total - baseline).
+        # For reporting per-cluster E_charge that should sum to reported total E_charge,
+        # distribute the baseline uniformly across clusters.
+        k = max(1, len(phi))
+        phi_total_consistent = phi + (baseline / float(k))
+
+        # Keep strict consistency with the total used in NCIENERGY output.
+        # Any tiny numerical drift is corrected uniformly.
+        drift = float(total_charge - np.sum(phi_total_consistent))
+        phi_total_consistent = phi_total_consistent + (drift / float(k))
+
+        return total_charge, phi_total_consistent
 
 
 def calculate_energy_single(output, ispromol, supra):
@@ -111,7 +123,6 @@ def calculate_energy_single(output, ispromol, supra):
             E_vdw = -np.array(-811.5827*NCI_index_dict["Weak"][0]**2 + 115.258*np.power(NCI_index_dict["Weak"][5], 0.333) + 3399.1965*NCI_index_dict["Weak"][2])
     
     return E_polar + E_vdw, E_polar, E_vdw
-
 
 
 def calculate_energy_cluster(output, ispromol, supra, mol1, mol2, filename):

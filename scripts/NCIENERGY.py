@@ -91,7 +91,10 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
             E_sum, E_polar, E_vdw = calculate_energy_cluster(contents, ispromol, supra, mol1, mol2, filename)
             for cluster_id, (e_sum, e_polar, e_vdw) in enumerate(zip(E_sum, E_polar, E_vdw)):
                 print(f" Cluster {cluster_id} energies / kJ/mol")
-                print(" E_sum    :        {:.2f}".format(e_sum))
+                if use_charge_model and cluster_id < len(E_charge_clusters):
+                    print(" E_sum    :        {:.2f}".format(e_sum + E_charge_clusters[cluster_id]))
+                else:
+                    print(" E_sum    :        {:.2f}".format(e_sum))
                 print(" E_polar  :        {:.2f}".format(e_polar))
                 print(" E_vdw    :        {:.2f}".format(e_vdw))
                 if use_charge_model and cluster_id < len(E_charge_clusters):

@@ -48,6 +48,12 @@ in the dat/ subdirectory. Set it to the absolute path to NCIPLOT:
 You may add the previous line to your .bashrc or .bash_aliases file for
 convenience.
 
+To run the NCICLUSTER and/or NCIENERGY modules, a dedicated conda environment should be created to install xtb, sklearn,
+and onnx dependencies:
+
+>conda create --name nci_env --file requirements.txt
+>conda activate nci_env
+
 The code has been parallelized for shared-memory architectures using the OpenMP library. To use this
 feature, set the OMP_NUM_THREADS environment variable to the number of cores:
 
@@ -75,12 +81,10 @@ As a brief outline, the accepted keywords in this version are:<br />
    ! - RANGE<br />
    ! - NCICLUSTER<br />
    ! - NCIENERGY<br />
+   ! - CHARGES<br />
    ! - FINE<br />
    ! - ULTRAFINE<br />
    ! - COARSE<br />
    !==========================================================================!<br />
-
-* Updates
-This is a code in progress! The quantititative approach is being extended to ionic systems and the updated code will come soon!
 
 Have fun!
