@@ -2,7 +2,7 @@
 import numpy as np
 
 def options_dict(options):
-    opt_dict = {"isovalue": 1.0, "ispromol": True, "range": [-0.2, -0.02], "verbose": False}
+    opt_dict = {"isovalue": 1.0, "ispromol": True, "range": [], "verbose": False}
 
     for i, op in enumerate(options[0::2]):
         if op == "--help":
@@ -44,7 +44,9 @@ def options_dict(options):
             else:
                 raise ValueError("{} is not a valid option".format(op))
     #reshape range to be a 2 x n array
-    opt_dict["range"] = np.array(opt_dict["range"]).reshape(-1, 2)
+    if len(opt_dict["range"]) % 2 != 0:
+        raise ValueError("--range values must be provided in pairs")
+    opt_dict["range"] = np.array(opt_dict["range"], dtype=float).reshape(-1, 2)
     
     return opt_dict
 

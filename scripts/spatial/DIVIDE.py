@@ -74,7 +74,7 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True
     # gradient threshold relative to the median of the gradient
     # This is to avoid being too sensitive to noise in the gradient
     gradient_threshold = np.percentile(gradient, threshold)
-    print(" Gradient threshold: ", gradient_threshold)
+    print(" Gradient threshold: ", round(gradient_threshold, 2))
     possible_minima = group_grad_to_grid(coordinates, gradient, 1, gradient_threshold)
 
     critical_points = []
@@ -104,7 +104,10 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True
             c, n = read_wfn(m)
             mol_coords.append(c)
             mol_names.append(n)
-    print(" Densities at critical points: ")
+    print("")
+    print(" Critical points found ")
+    print("----------------------------------------------------------------------")
+    print(" CP#  Neighbouring atoms (1, 2)  Distances / A (1, 2)   Density (a.u.)")
     for i, cp in enumerate(critical_points):
         #iterate over molecules to find nearest atoms
         min_dist1 = float('inf')
@@ -137,7 +140,7 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True
                 if dists[local_min_idx] < min_dist2:
                     name2 = mol_n[local_min_idx]
                     min_dist2 = dists[local_min_idx]
-        print(f"CP{i+1} Neighbours: {name1, name2}, Distances: {min_dist1:.4f}, {min_dist2:.4f}, Density: {cp[1]/100:.4f}")
+        print(f" {i+1:>3}      {name1:<8} {name2:<8}        {min_dist1:>7.4f} {min_dist2:>7.4f}      {cp[1]/100:>8.4f}")
 
     return critical_points
 

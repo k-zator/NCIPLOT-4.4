@@ -1272,11 +1272,12 @@ do while (.true.)
                if (i >= ubound(rmbox_coarse,1) .or. &
                    j >= ubound(rmbox_coarse,2) .or. &
                    k >= ubound(rmbox_coarse,3)) cycle
-               ! write the dat file
-               if (ludat > 0 .and. .not. intra .and. (abs(rho) < rhocut) .and. (dimgrad < dimcut) .and. &
-                   (abs(rho) > 1d-30) .and. .not. (rmbox_coarse(i, j, k) )) then
+                  ! write .dat with the same selector used by point integration logic:
+                  ! active boxes + cgrad > 0 (includes ghost/sentinel sites such as 101)
+                  if (ludat > 0 .and. (cgrad(i, j, k) .gt. 0d0) .and. (abs(rho) > 1d-30) .and. &
+                     .not. (rmbox_coarse(i, j, k) )) then
                   write (ludat, '(1p,E18.10,E18.10)') rho, dimgrad
-               endif ! rhocut/dimcut
+               endif ! integration-equivalent selector
             end do
          end do
       end do

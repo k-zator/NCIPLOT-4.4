@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-import sys 
+import sys
 from spatial.OPT_DICT import options_energy_calc
 from spatial.calculate_NCI_energy import (
     calculate_energy_cluster,
@@ -17,59 +17,90 @@ including ones where sigma hole interactions are present.
 Parameters: path to nci_output_file. (afaik, it produces the values in the file in previous step so this is sort of recursive)
 """
 
-# Set options from command line
-options = []
-if sys.argv[1]!="--help":
-    input_name = sys.argv[1]
-else:
-    options.append(sys.argv[1])
-
-if len(sys.argv)>2:
-    options += sys.argv[2:]
-
-opt_dict = options_energy_calc(options)
-oname    = opt_dict["oname"]
-gamma    = opt_dict["gamma"]
-l_large  = opt_dict["outer"]
-l_small  = opt_dict["inner"]
-isovalue = opt_dict["isovalue"]
-intermol = opt_dict["intermol"]
-ispromol = opt_dict["ispromol"]
-cluster  = opt_dict["cluster"]
-supra    = opt_dict["supra"]
-mol1 = opt_dict["mol1"]
-mol2 = opt_dict["mol2"]
-total_charges = opt_dict["total_charges"]
-use_charges = opt_dict["use_charges"]
-# Read input file
-files = []
-with open(input_name, "r") as f:
-    for line in f:
-        files.append(line[:-1])
-filename = files[0]
-
-# The equation is rather parameter-dependent hence the all the parameters need to be set correctly
-# to produce a reasonable energy estimate using the given equations
-if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
-    if (ispromol and gamma == 0.85) or (not ispromol and gamma == 0.75):
-        pass
-    else:
-        print(" NCIENERGY mode runs only with the default parameters:")
-        print(" RDG_CUTOFF 1.00 0.30")
-        print(" INTEGRATE")
-        print(" INTERMOL_CUTOFF 0.85 (0.75 for DFT)")
+def _print_default_parameter_message(include_range_n=False):
+    print(" NCIENERGY mode runs only with the default parameters:")
+    print(" RDG_CUTOFF 1.00 0.30")
+    print(" INTEGRATE")
+    print(" INTERMOL_CUTOFF 0.85 (0.75 for DFT)")
+    if include_range_n:
         print(" RANGE 3")
-        print(" -0.20 -0.02")
-        print(" -0.02  0.02")
-        print("  0.02  0.20")
+    else:
+        print(" RANGE")
+    print(" -0.20 -0.02")
+    print(" -0.02  0.02")
+    print("  0.02  0.20")
 
-    # obtain the contents of the nci_output file
+
+def _validate_default_parameters(opt_dict):
+    is_default_core = (
+        opt_dict["isovalue"] == 1.0
+        and opt_dict["outer"] == 0.2
+        and opt_dict["inner"] == 0.02
+        and opt_dict["intermol"] is True
+    )
+    if not is_default_core:
+        _print_default_parameter_message(include_range_n=False)
+        return False
+
+    gamma = opt_dict["gamma"]
+    ispromol = opt_dict["ispromol"]
+    if (ispromol and gamma == 0.85) or ((not ispromol) and gamma == 0.75):
+        return True
+
+    _print_default_parameter_message(include_range_n=True)
+    return False
+
+
+def _parse_cli(argv):
+    if not argv:
+        print("Usage: NCIENERGY.py input_names [OPTIONS]")
+        return None, ["--help"]
+
+    options = []
+    if argv[0] != "--help":
+        input_name = argv[0]
+    else:
+        input_name = None
+        options.append("--help")
+
+    if len(argv) > 1:
+        options += argv[1:]
+
+    return input_name, options
+
+
+def main(argv=None):
+    input_name, options = _parse_cli(sys.argv[1:] if argv is None else argv)
+    opt_dict = options_energy_calc(options)
+
+    if input_name is None:
+        return 0
+
+    if not _validate_default_parameters(opt_dict):
+        return 1
+
+    oname = opt_dict["oname"]
+    ispromol = opt_dict["ispromol"]
+    cluster = opt_dict["cluster"]
+    supra = opt_dict["supra"]
+    mol1 = opt_dict["mol1"]
+    mol2 = opt_dict["mol2"]
+    total_charges = opt_dict["total_charges"]
+    use_charges = opt_dict["use_charges"]
+
+    files = []
+    with open(input_name, "r") as f:
+        for line in f:
+            files.append(line[:-1])
+    filename = files[0]
+
     try:
-        with open(f"nci_{oname}.out") as f: # need to know the NAME of output which it techincally has no way of finding out!!!
+        with open(f"nci_{oname}.out") as f:
             contents = f.readlines()
     except FileNotFoundError:
         print(f"Error: nci_{oname}.out not found. Please ensure that your NCIPLOT output file is named 'nci_{oname}.out'.")
-        sys.exit(1)
+        return 1
+
     print("----------------------------------------------------------------------")
     print("                             NCIENERGY                                ")
     print("----------------------------------------------------------------------")
@@ -106,7 +137,7 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
                 print(" Warning: cluster count mismatch between NCI integration and charge attribution vectors.")
             print(" Summed-across-clusters integrals / kJ/mol")
             if use_charge_model:
-                print(" E_sum    :        {:.2f}".format(E_sum.sum()+ E_charge_correction))
+                print(" E_sum    :        {:.2f}".format(E_sum.sum() + E_charge_correction))
             else:
                 print(" E_sum    :        {:.2f}".format(E_sum.sum()))
             print(" E_polar  :        {:.2f}".format(E_polar.sum()))
@@ -117,11 +148,11 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
         else:
             if use_charge_model:
                 E_charge_correction = calculate_charge_correction(mol1, mol2, ispromol, total_charges, supra=supra)
-            print(" If your system contains sigma hole interactions, " \
-            "consider using the clustering mode for better energy accuracy")
+            print(" If your system contains sigma hole interactions, "
+                  "consider using the clustering mode for better energy accuracy")
             print("----------------------------------------------------------------------")
             E_sum, E_polar, E_vdw = calculate_energy_single(contents, ispromol, supra)
-            print(f" NCI energies / kJ/mol")
+            print(" NCI energies / kJ/mol")
             if use_charge_model:
                 print(" E_sum    :        {:.2f}".format(E_sum + E_charge_correction))
             else:
@@ -132,7 +163,7 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
                 print(" E_charge :        {:.2f}".format(E_charge_correction))
             print("----------------------------------------------------------------------")
 
-    else: # using WFN (vs. WFX?)
+    else:
         print(" Calculating energy using the DFT equations")
         if cluster:
             E_sum, E_polar, E_vdw = calculate_energy_cluster(contents, ispromol, supra, mol1, mol2, filename)
@@ -147,23 +178,19 @@ if isovalue == 1.0 and l_large == 0.2 and l_small == 0.02 and intermol == True:
             print(" E_polar :        {:.2f}".format(E_polar.sum()))
             print(" E_vdw   :        {:.2f}".format(E_vdw.sum()))
             print("----------------------------------------------------------------------")
-        else:           
-            print(" If your system contains sigma hole interactions, " \
-            "consider using the clustering mode for better energy accuracy")
+        else:
+            print(" If your system contains sigma hole interactions, "
+                  "consider using the clustering mode for better energy accuracy")
             print("----------------------------------------------------------------------")
             E_sum, E_polar, E_vdw = calculate_energy_single(contents, ispromol, supra)
-            print(f" NCI energies / kJ/mol")
+            print(" NCI energies / kJ/mol")
             print(" E_sum   :        {:.2f}".format(E_sum))
             print(" E_polar :        {:.2f}".format(E_polar))
             print(" E_vdw   :        {:.2f}".format(E_vdw))
             print("----------------------------------------------------------------------")
 
-else:
-    print(" NCIENERGY mode runs only with the default parameters:")
-    print(" RDG_CUTOFF 1.00 0.30")
-    print(" INTEGRATE")
-    print(" INTERMOL_CUTOFF 0.85 (0.75 for DFT)")
-    print(" RANGE")
-    print(" -0.20 -0.02")
-    print(" -0.02  0.02")
-    print("  0.02  0.20")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
