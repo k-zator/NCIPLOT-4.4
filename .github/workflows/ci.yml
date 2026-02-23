@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["**"]
   pull_request:
-    branches: ["main", "master"]
+    branches: ["**"]
   workflow_dispatch:
 
 jobs:
@@ -41,10 +41,8 @@ jobs:
           name: coverage-xml
           path: coverage.xml
 
-      - name: Upload to Codecov (optional)
-        if: ${{ secrets.CODECOV_TOKEN != '' }}
+      - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:
           files: coverage.xml
           fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}

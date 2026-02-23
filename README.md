@@ -1,6 +1,9 @@
 NCIPLOT is a program for revealing non covalent interactions based on the reduced density gradient. Please cite:
 NCIPLOT-4.4: DOI: https://hal.science/hal-04943402v2/
 
+[![CI](https://github.com/k-zator/NCIPLOT-4.4/actions/workflows/ci.yml/badge.svg)](https://github.com/k-zator/NCIPLOT-4.4/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/k-zator/NCIPLOT-4.4/branch/main/graph/badge.svg)](https://codecov.io/gh/k-zator/NCIPLOT-4.4)
+
 Developer: Katarzyna J. Zator
 
 * Overview
