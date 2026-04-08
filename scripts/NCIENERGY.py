@@ -115,7 +115,7 @@ def main(argv=None):
                     ispromol,
                     total_charges,
                     filename + "_CPs.xyz",
-                    cutoff=1.0,
+                    cutoff=7.0,
                     supra=supra,
                     return_shapley=True,
                 )

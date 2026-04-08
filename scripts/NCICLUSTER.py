@@ -86,7 +86,7 @@ def main(argv=None):
                 rhorange=opt_dict["range"],
             )
         )
-        write_cube_select(filename, i, Mrhos, labels, header, grid)
+        #write_cube_select(filename, i, Mrhos, labels, header, grid)
         print("----------------------------------------------------------------------")
         print(" Cluster {}".format(i + 1))
         for r in range(len(opt_dict["range"])):
@@ -120,7 +120,7 @@ def main(argv=None):
             print(" Volume          :        {:.8f}".format(total_integrals[r][7]))
     print("----------------------------------------------------------------------")
 
-    write_vmd(filename, labels, opt_dict["isovalue"], verbose=opt_dict["verbose"])
+    #write_vmd(filename, labels, opt_dict["isovalue"], verbose=opt_dict["verbose"])
     return 0
 
 
