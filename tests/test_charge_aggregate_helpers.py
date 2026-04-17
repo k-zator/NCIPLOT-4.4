@@ -67,7 +67,7 @@ def test_geometry_and_charge_readers(tmp_path):
     assert coords.shape == (2, 3)
 
     wfn = tmp_path / "a.wfn"
-    wfn.write_text("line1\nline2\nX Cl (CENTRE 1.0 2.0 3.0 0.0\n")
+    wfn.write_text("line1\nline2\n Cl X (CENTRE 1.0 2.0 3.0 0.0\n")
     elems_w, coords_w = agg.read_wfn_geometry(wfn)
     assert elems_w == ["Cl"]
     assert coords_w.shape == (1, 3)
