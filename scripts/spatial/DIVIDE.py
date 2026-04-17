@@ -89,6 +89,14 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True
             critical_points.append([coordinates[point_idx], density[point_idx], gradient[point_idx]])
 
     critical_points = filter_close_CPs(critical_points, min_distance=0.6)
+
+    # second filter: they cannot have no points associatesd with them in the original grid (i.e. they cannot be isolated points in the gradient field)
+    final_CPs = []
+    for cp in critical_points:
+        dist = np.linalg.norm(coordinates - cp[0], axis=1)
+        if np.any(dist < 0.5):  # Check if there are points within 0.5 Å of the CP
+            final_CPs.append(cp)
+    print(" Number of critical points after filtering: ", len(final_CPs))
     print(" Number of critical points found: ", len(critical_points))
 
     # Print CPs, their densities, gradients and neighboring atoms

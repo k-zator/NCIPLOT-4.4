@@ -1,11 +1,30 @@
 import numpy as np
 from multiprocessing import Pool
 
+
+def apply_cube_boundary_sentinels(densarray, gradarray, dens_sentinel=100.0, grad_sentinel=101.0):
+    """Exclude the outermost cube shell from downstream CP and integration logic."""
+    densarray = densarray.copy()
+    gradarray = gradarray.copy()
+
+    for axis in range(3):
+        low = [slice(None)] * 3
+        high = [slice(None)] * 3
+        low[axis] = 0
+        high[axis] = -1
+        densarray[tuple(low)] = dens_sentinel
+        densarray[tuple(high)] = dens_sentinel
+        gradarray[tuple(low)] = grad_sentinel
+        gradarray[tuple(high)] = grad_sentinel
+
+    return densarray, gradarray
+
 def process_cube(filename):
     """Read and format cubes"""
     # Load the density and gradient data
     header, denspts, densarray, _  = read_cube(f"{filename}-dens.cube")
     _, _, gradarray, _  = read_cube(f"{filename}-grad.cube")
+    densarray, gradarray = apply_cube_boundary_sentinels(densarray, gradarray)
     # Mrhos - matrix of density and gradient values
     nx, ny, nz = densarray.shape
     Mrhos = np.zeros((nx, ny, nz, 5))

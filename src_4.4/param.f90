@@ -42,6 +42,13 @@ module param
    real*8, parameter :: const = 2.D0*(3.D0*PI**2)**(1.D0/3.D0)
    real*8, parameter :: eps = epsilon(1d0)
 
+   ! Thomas-Fermi kinetic energy density prefactor: c_F = (3/10)*(3*pi^2)^(2/3)
+   ! Used in the Kirzhnits gradient expansion approximation for the positive
+   ! kinetic energy density G(r), and specifically in the interfragment Pauli
+   ! Kinetic Energy Excess (KEE) descriptor DeltaC.
+   ! Reference: Kirzhnits (1957); Abramov (1997); Tsirelson & Stash (2002).
+   real*8, parameter :: cf_tf = (3.D0/10.D0)*(3.D0*PI**2)**(2.D0/3.D0)
+
    ! physics
    real*8, parameter :: bohrtoa = 0.52917720859 !< bohr to angstrom conversion factor (nist2006)
 

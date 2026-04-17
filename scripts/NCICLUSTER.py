@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from spatial.UTILS import process_cube, write_cube_select, write_vmd
 from spatial.DIVIDE import find_CP_with_gradient, write_CPs_xyz
-from spatial.INTEGRATE import integrate_NCI_cluster
+from spatial.INTEGRATE import integrate_NCI_cluster, integrate_NCI_cluster_wfn
 from spatial.OPT_DICT import options_dict
 
 """
@@ -74,18 +74,32 @@ def main(argv=None):
     integrals = []
     for i in np.unique(labels):
         cluster_grad = np.reshape(Mrhos[:, 4], grid)
-        integrals.append(
-            integrate_NCI_cluster(
-                cluster_grad,
-                densarray,
-                grid,
-                dvol,
-                labels,
-                i,
-                rhoparam=s,
-                rhorange=opt_dict["range"],
-            )
-        )
+        if opt_dict["ispromol"]:
+            integrals.append(
+                integrate_NCI_cluster(
+                    cluster_grad,
+                    densarray,
+                    grid,
+                    dvol,
+                    labels,
+                    i,
+                    rhoparam=s,
+                    rhorange=opt_dict["range"],
+                    promol=opt_dict["ispromol"],
+                ))
+        else:
+            integrals.append(
+                integrate_NCI_cluster_wfn(
+                    cluster_grad,
+                    densarray,
+                    grid,
+                    dvol,
+                    labels,
+                    i,
+                    rhoparam=s,
+                    rhorange=opt_dict["range"],
+                ))
+        
         #write_cube_select(filename, i, Mrhos, labels, header, grid)
         print("----------------------------------------------------------------------")
         print(" Cluster {}".format(i + 1))
@@ -120,7 +134,7 @@ def main(argv=None):
             print(" Volume          :        {:.8f}".format(total_integrals[r][7]))
     print("----------------------------------------------------------------------")
 
-    #write_vmd(filename, labels, opt_dict["isovalue"], verbose=opt_dict["verbose"])
+    write_vmd(filename, labels, opt_dict["isovalue"], verbose=opt_dict["verbose"])
     return 0
 
 

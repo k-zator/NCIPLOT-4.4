@@ -55,6 +55,7 @@ To run the NCICLUSTER and/or NCIENERGY modules, a dedicated conda environment sh
 and onnx dependencies:
 
 >conda create --name nci_env --file requirements.txt
+
 >conda activate nci_env
 
 The code has been parallelized for shared-memory architectures using the OpenMP library. To use this

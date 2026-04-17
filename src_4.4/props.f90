@@ -512,7 +512,7 @@ contains
 
    end subroutine init_rhogrid
 
-   subroutine calcprops_pro(x, m, nm, rho, rho_n, rhom, nfr, autofr, grad, hess, deltag)
+   subroutine calcprops_pro(x, m, nm, rho, rho_n, rhom, nfr, autofr, grad, hess, deltag, gradm)
       use reader
       use tools_io
       use param
@@ -523,10 +523,19 @@ contains
       type(molecule) :: m(nm)
       real*8, intent(out) :: rho, rho_n(1:nm), rhom(nfr), grad(3), hess(3, 3)
       real*8, intent(out) :: deltag
+      ! Per-fragment gradient vectors for the interfragment Pauli KEE descriptor.
+      ! Accumulated across all molecule files, one gradient vector per fragment.
+      ! These enable computation of the per-fragment Weizsacker KE density
+      ! G_W(rho_l) = |grad(rho_l)|^2 / (8*rho_l), which appears in:
+      !   DeltaC = DeltaC_TF - (8/9) * DeltaG_W
+      real*8, intent(out) :: gradm(3, nfr)
 
       integer :: i
       real*8 :: hh(3, 3), gg(3), rr, grad2, rhomr(nfr), tp
       real*8 :: igmgg(3), gradigm(3), gradigm2
+      ! Temporary per-fragment gradient for each molecule file,
+      ! to be accumulated into the global gradm across all files.
+      real*8 :: gradmr(3, nfr)
 
       rho = 0d0
       rhom = 0d0
@@ -534,22 +543,30 @@ contains
       gradigm = 0d0
       hess = 0d0
       tp = 0d0
+      gradm = 0d0     ! initialize the per-fragment gradient accumulator
       do i = 1, nm
+         gradmr = 0d0  ! per-file fragment gradient scratch space
          select case (m(i)%ifile)
          case (ifile_xyz)
-            ! promolecular densities
-            call promolecular(x, m(i), rr, gg, hh, rhomr, nfr, autofr, igmgg)
+            ! promolecular densities — now also returns per-fragment gradients
+            call promolecular(x, m(i), rr, gg, hh, rhomr, nfr, autofr, igmgg, gradmr)
          case (ifile_grd, ifile_wfn, ifile_wfx)
-            call promolecular_grid(x, m(i), rr, gg, hh, rhomr, nfr, autofr, .false.)
+            call promolecular_grid(x, m(i), rr, gg, hh, rhomr, nfr, autofr, .false., gradmr)
          case default
             call error('calcprops', 'unknown molecule type', faterr)
          end select
          rho = rho + rr
          rho_n(i) = rr
          if (autofr) then
+            ! In autofrag mode, each file IS a fragment, so the entire gradient
+            ! from this file goes to that fragment's slot.
             rhom(i) = rhom(i) + rr
+            gradm(:, i) = gradm(:, i) + gg
          else
+            ! In manual fragment mode, accumulate per-fragment contributions
+            ! that were already partitioned inside promolecular/promolecular_grid.
             rhom = rhom + rhomr
+            gradm = gradm + gradmr
          end if
          grad = grad + gg
          hess = hess + hh
@@ -568,7 +585,7 @@ contains
    end subroutine calcprops_pro
 
    !> Calculate the density and gradient using atomic densities
-   subroutine promolecular(x, m, rho, grad, hess, rhom, nfr, autofr, gradigm)
+   subroutine promolecular(x, m, rho, grad, hess, rhom, nfr, autofr, gradigm, gradm)
       use reader
       use tools_io
       use param
@@ -579,6 +596,10 @@ contains
       real*8, intent(out) :: rho, grad(3), hess(3, 3), rhom(nfr)
       logical, intent(in) :: autofr
       real*8, intent(out) :: gradigm(3)
+      ! Per-fragment gradient vectors, needed for the Weizsacker correction
+      ! in the interfragment Pauli KEE descriptor (DeltaC).
+      ! gradm(:,l) accumulates the density gradient contributed by fragment l.
+      real*8, intent(out) :: gradm(3, nfr)
 
       ! The C and ZETA data blocks are the coefficients and exponents
       ! for the atoms in the first three row of the periodic table, H-Ar.
@@ -624,6 +645,7 @@ contains
       grad = 0d0
       gradigm = 0d0
       hess = 0d0
+      gradm = 0d0   ! initialize per-fragment gradient accumulator
       do i = 1, m%n
          iz = m%z(i)
          if (iz < 1 .or. iz > atomic_zmax) &
@@ -645,7 +667,15 @@ contains
          fac3 = fac2 + fac1*r1
 
          rho = rho + fac0
-         if (.not. autofr .and. m%ifrag(i) > 0) rhom(m%ifrag(i)) = rhom(m%ifrag(i)) + fac0
+         if (.not. autofr .and. m%ifrag(i) > 0) then
+            ! Accumulate density AND gradient per fragment.
+            ! The gradient contribution from each atom goes to its assigned fragment,
+            ! mirroring the existing per-fragment density accumulation in rhom.
+            ! These per-fragment gradients enable the Weizsacker correction term
+            ! in the interfragment Pauli KEE descriptor DeltaC.
+            rhom(m%ifrag(i)) = rhom(m%ifrag(i)) + fac0
+            gradm(:, m%ifrag(i)) = gradm(:, m%ifrag(i)) - fac1*xu
+         end if
          grad = grad - fac1*xu
          do j = 1, 3
             gradigm(j) = gradigm(j) + sqrt(fac1*fac1*xu(j)*xu(j))
@@ -824,7 +854,7 @@ contains
    end subroutine index0
 
    !> Calculate the density and gradient using atomic densities
-   subroutine promolecular_grid(x, m, rho, grad, hess, rhom, nfr, autofr, fronly)
+   subroutine promolecular_grid(x, m, rho, grad, hess, rhom, nfr, autofr, fronly, gradm)
       use reader
       use tools_io
       use param
@@ -834,6 +864,9 @@ contains
       integer, intent(in) :: nfr
       real*8, intent(out) :: rho, grad(3), hess(3, 3), rhom(nfr)
       logical, intent(in) :: autofr, fronly
+      ! Per-fragment gradient vectors for the Weizsacker correction in DeltaC.
+      ! Same role as gradm in promolecular() — see comments there.
+      real*8, intent(out) :: gradm(3, nfr)
 
       integer :: i, j, k, iz, iq, ityp
       real*8 :: xd(3), r, r1, r2, f, fp, fpp, rfac, radd
@@ -842,6 +875,7 @@ contains
       rhom = 0d0
       grad = 0d0
       hess = 0d0
+      gradm = 0d0   ! initialize per-fragment gradient accumulator
       do i = 1, m%n
          iz = m%z(i)
          iq = m%q(i)
@@ -856,7 +890,13 @@ contains
          r2 = r1*r1
          call grid1_interp(grd(ityp), r, f, fp, fpp)
 
-         if (.not. autofr .and. m%ifrag(i) > 0) rhom(m%ifrag(i)) = rhom(m%ifrag(i)) + f
+         if (.not. autofr .and. m%ifrag(i) > 0) then
+            ! Accumulate per-fragment density and gradient, as in promolecular().
+            ! The gradient sign convention here uses +fp*xd/r (grid-based),
+            ! matching the total gradient accumulation below.
+            rhom(m%ifrag(i)) = rhom(m%ifrag(i)) + f
+            gradm(:, m%ifrag(i)) = gradm(:, m%ifrag(i)) + fp*xd*r1
+         end if
          if (.not. fronly) then
             rho = rho + f
             grad = grad + fp*xd*r1
@@ -947,6 +987,7 @@ contains
       integer :: i, iz
       real*8 :: r, x(3), rho1, rho2, grad1(3), grad2(3), hess1(3, 3), hess2(3, 3), igmgg(3)
       real*8 :: rhom(100)
+      real*8 :: gradm_dum(3, 100)
 
       integer, parameter :: lu = 10
 
@@ -968,8 +1009,8 @@ contains
          do i = 1, mpts
             r = rmax*real(i, 8)/real(mpts, 8)
             x = (/0d0, 0d0, r/)
-            call promolecular(x, m, rho1, grad1, hess1, rhom, 100, .true., igmgg)
-            call promolecular_grid(x, m, rho2, grad2, hess2, rhom, 100, .true., .false.)
+            call promolecular(x, m, rho1, grad1, hess1, rhom, 100, .true., igmgg, gradm_dum)
+            call promolecular_grid(x, m, rho2, grad2, hess2, rhom, 100, .true., .false., gradm_dum)
             write (lu, *) i, r, rho1, rho2
          end do
          write (lu, *)

@@ -71,3 +71,89 @@ def integrate_NCI_cluster(gradarray, densarray, grid, dvol, labels, cluster_id,r
         sum_rhon_vol.append(region_integral(m))
 
     return np.array(sum_rhon_vol)
+
+def integrate_NCI_cluster_wfn(
+    gradarray,
+    densarray,
+    grid,
+    dvol,
+    labels,
+    cluster_id,
+    rhoparam=1.0,
+    rhocut=0.2,
+    rhorange=[[-0.2, -0.02]],
+):
+    """
+    Exact WFN-style reconstruction of nciplot.f90 range integration:
+      - rebuild final active-box mask from written cubes
+      - build per-range point mask from active boxes
+      - integrate with dataGeom_points semantics
+    """
+    integral_powers = np.array([1, 1.5, 2, 2.5, 3, 4 / 3, 5 / 3, 0])
+    nx, ny, nz = grid
+    n_ranges = len(rhorange)
+    sum_rhon_vol = np.zeros((n_ranges, len(integral_powers)), dtype=float)
+
+    # Fortran WFN box selection uses the LOWER CORNER cgrad(i,j,k), not any corner.
+    # The written grad.cube already contains 100/101 sentinels, so this reproduces
+    # the post-cross-check "dimgrad > dimcut => remove box" behavior.
+    active_box = gradarray[:-1, :-1, :-1] < rhoparam
+
+    # Fortran refinement before dataGeom/dataGeom_points:
+    # if any vertex has abs(rho) > rhocut and cgrad > 0, remove the box.
+    for i in range(nx - 1):
+        for j in range(ny - 1):
+            for k in range(nz - 1):
+                if not active_box[i, j, k]:
+                    continue
+                rho_block = densarray[i : i + 2, j : j + 2, k : k + 2] / 100.0
+                grad_block = gradarray[i : i + 2, j : j + 2, k : k + 2]
+                if np.any((np.abs(rho_block) > rhocut) & (grad_block > 0.0)):
+                    active_box[i, j, k] = False
+
+    # Fortran box_in_range / tmp_rmbox_range_tmp:
+    # True = excluded, False = included
+    point_excluded = np.ones((n_ranges, nx, ny, nz), dtype=bool)
+
+    for r, bounds in enumerate(rhorange):
+        lowerbound, upperbound = sorted(bounds)
+        for i in range(nx - 1):
+            for j in range(ny - 1):
+                for k in range(nz - 1):
+                    if not active_box[i, j, k]:
+                        continue
+                    for ii in (i, i + 1):
+                        for jj in (j, j + 1):
+                            for kk in (k, k + 1):
+                                val = densarray[ii, jj, kk] / 100.0
+                                if (val > lowerbound) and (val < upperbound) and (gradarray[ii, jj, kk] > 0.0):
+                                    point_excluded[r, ii, jj, kk] = False
+
+    # Exact dataGeom_points semantics:
+    # loop over ACTIVE BOXES, then over 8 vertices, and include the vertex if
+    # it is marked in-range in the global point mask.
+    for i in range(nx - 1):
+        for j in range(ny - 1):
+            for k in range(nz - 1):
+                if not active_box[i, j, k]:
+                    continue
+
+                for ii in (i, i + 1):
+                    for jj in (j, j + 1):
+                        for kk in (k, k + 1):
+                            lin = ii * (ny * nz) + jj * nz + kk
+                            if cluster_id is not None and labels[lin] != cluster_id:
+                                continue
+
+                            rho_abs = abs(densarray[ii, jj, kk] / 100.0)
+
+                            for r in range(n_ranges):
+                                if point_excluded[r, ii, jj, kk]:
+                                    continue
+                                for p_idx, power in enumerate(integral_powers):
+                                    if power == 0:
+                                        sum_rhon_vol[r, p_idx] += dvol / 8.0
+                                    else:
+                                        sum_rhon_vol[r, p_idx] += (rho_abs ** power) * dvol / 8.0
+
+    return sum_rhon_vol

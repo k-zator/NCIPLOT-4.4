@@ -56,9 +56,10 @@ program nciplot
    type(molecule), allocatable :: m(:)
    character*(mline), allocatable :: filenames(:)
    ! logical units
-   integer :: lugc, ludc, luvmd, ludat, lurc
+   integer :: lugc, ludc, luvmd, ludat, lurc, lukee
    ! cubes
-   real*8, allocatable, dimension(:, :, :) :: crho, cgrad, csteric
+   real*8, allocatable, dimension(:, :, :) :: crho, cgrad, ckee
+   real*8, allocatable, dimension(:, :, :) :: ckee_region
    ! ligand, intermolecular keyword
    logical :: ligand, inter, intra
    real*8 :: rthres
@@ -76,9 +77,13 @@ program nciplot
    ! intermolecularity cutoff
    real*8 :: rhoparam
    ! properties of rho
-   real*8 :: rho, grad(3), dimgrad, grad2, hess(3, 3), esteric
+   real*8 :: rho, grad(3), dimgrad, grad2, hess(3, 3), ekee
    integer, parameter :: mfrag = 100 ! max number of fragments
    real*8 :: rhom(mfrag)
+   ! Per-fragment gradient and ΔC helpers
+   real*8 :: gradm(3, mfrag)
+   real*8 :: ekee_tf, gw_total, gw_frags, grad2_l
+   real*8 :: keecut
    ! eispack
    real*8 :: wk1(3), wk2(3), heigs(3), hvecs(3, 3)
    ! Fragments
@@ -104,7 +109,7 @@ program nciplot
    integer :: indx(3), nstep_coarse(3)
    real*8, allocatable :: fginc(:)
    real*8 :: xinc_coarse(3)
-   real*8, allocatable, dimension(:, :, :) :: tmp_crho, tmp_cgrad, tmp_csteric
+   real*8, allocatable, dimension(:, :, :) :: tmp_crho, tmp_cgrad, tmp_ckee
    logical :: flag, firstgrid
    logical, allocatable :: rmbox_coarse(:, :, :), tmp_rmbox(:, :, :), rmpoint_coarse(:,:,:)
    integer :: cr, c0, c1, c2, c3, c4, c5, c6
@@ -125,6 +130,8 @@ program nciplot
    real*8, allocatable :: srhorange(:, :),rho_range(:)
    real*8 :: upperbound, lowerbound,total_rho,sumrangedensity, densitydifference
    logical, allocatable:: tmp_rmbox_range(:,:,:,:), tmp_rmbox_range_tmp(:,:,:), box_in_range(:,:,:,:)
+   ! Self-consistent KEE integration
+   logical, allocatable :: rmpoint_kee(:,:,:)
    !===============================================================================!
    ! System clock to measure run time.
    !===============================================================================!
@@ -243,6 +250,7 @@ program nciplot
       ligand = .false.                 ! ligand keyword
       inter = .false.                  ! intermolecular keyword
       rthres = 0.75d0/bohrtoa          ! box limits around the molecule
+      keecut = 0d0                      ! KEE threshold for self-consistent volume (0 = disabled)
       dointeg = .false.                ! integrating properties or not
       doclustering = .false.           ! clustering python script NCICLUSTER
       ncienergy = .false.              ! energy calculation with python script NCIENERGY
@@ -385,6 +393,9 @@ do while (.true.)
 
       case ("INTEGRATE")              ! integration of NCI regions
          dointeg = .true.              ! integrate
+      case ("KEECUT")                  ! KEE threshold for self-consistent integration volume
+         read (line, *) keecut
+         dointeg = .true.
       end select
    enddo
    
@@ -600,6 +611,7 @@ do while (.true.)
    lurc = -1 ! Box logical unit
    ludc = -1 ! Density logical unit
    luvmd = -1 ! VMD logical unit
+   lukee = -1 ! KEECUT region cube logical unit
    write (uout, 131)
    if (inter) then
       write (uout, 132) ! tell user intermolecular mode is on
@@ -615,6 +627,7 @@ do while (.true.)
    write (uout, 110) ' RDG  THRESHOLD   (au):', dimcut
    if (inter) write (uout, 110) ' INTERMOLECULARITY THRESHOLD :', rhoparam
    if (ligand) write (uout, 110) ' RADIAL THRESHOLD  (A):', rthres*bohrtoa
+   if (keecut > 0d0) write (uout, 110) ' KEE THRESHOLD    (au):', keecut
 
    if (noutput >= 2) then    ! number of outputs --> 2: Only .CUBE files
       lugc = 9
@@ -662,8 +675,8 @@ do while (.true.)
          if (istat /= 0) call error('nciplot', 'could not allocate memory for density cube', faterr)
          allocate (cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
          if (istat /= 0) call error('nciplot', 'could not allocate memory for grad', faterr)
-         allocate (csteric(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
-         if (istat /= 0) call error('nciplot', 'could not allocate memory for steric', faterr)
+         allocate (ckee(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         if (istat /= 0) call error('nciplot', 'could not allocate memory for ckee', faterr)
          xinc_coarse = xinc ! initialize just in case
          nstep_coarse = nstep ! initialize just in case
       end if
@@ -683,9 +696,9 @@ do while (.true.)
          if (allocated(tmp_cgrad)) deallocate (tmp_cgrad)
          allocate (tmp_cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
          call move_alloc(tmp_cgrad, cgrad)
-         if (allocated(tmp_csteric)) deallocate (tmp_csteric)
-         allocate (tmp_csteric(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
-         call move_alloc(tmp_csteric, csteric)
+         if (allocated(tmp_ckee)) deallocate (tmp_ckee)
+         allocate (tmp_ckee(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), stat=istat)
+         call move_alloc(tmp_ckee, ckee)
       end if
 
    !===============================================================================!
@@ -707,7 +720,8 @@ do while (.true.)
       if (ispromol) then    ! promolecular densities
          call system_clock(count=c1)
          !$omp parallel do private (x,rho,grad,hess,heigs,hvecs,wk1,wk2,istat,grad2,&
-         !$omp dimgrad,intra,rhom,flag,indx,i0,j0,k0) schedule(dynamic)
+         !$omp dimgrad,intra,rhom,flag,indx,i0,j0,k0,gradm,ekee,ekee_tf,gw_total,&
+         !$omp gw_frags,grad2_l,l) schedule(dynamic)
          do k = 0, nstep(3) - 1
             do j = 0, nstep(2) - 1
                do i = 0, nstep(1) - 1
@@ -733,7 +747,7 @@ do while (.true.)
                         crho(i, j, k) = 100d0
                         cgrad(i, j, k) = 100d0
                         cheig(i, j, k) = 0d0
-                        csteric(i, j, k) = 100d0
+                        ckee(i, j, k) = 100d0
                         cycle
                      end if
    20                continue
@@ -743,13 +757,29 @@ do while (.true.)
                   ! calculate properties at x
                   rho_n = 0d0
                   call calcprops_pro(x, m, nfiles, rho, rho_n, rhom(1:nfrag), nfrag, autofrag, &
-                                    grad, hess, deltag)
+                                    grad, hess, deltag, gradm(1:3, 1:nfrag))
                   call rs(3, 3, hess, heigs, 0, hvecs, wk1, wk2, istat)
                   rho = max(rho, 1d-30)
                   grad2 = dot_product(grad, grad)
                   dimgrad = sqrt(grad2)/(const*rho**(4.D0/3.D0))
-                  ! k-zator addition: Weizsacker kinetic energy / steric energy as a repulsion measure
-                  esteric = grad2/(rho*8.D0)
+                  ! Interfragment Pauli KEE excess via Kirzhnits gradient expansion:
+                  !   DeltaC = cf_tf*(rho_AB^(5/3) - sum rho_l^(5/3))
+                  !          - (8/9)*(G_W(rho_AB) - sum G_W(rho_l))
+                  ! Thomas-Fermi excess (non-negative by convexity of x^5/3)
+                  ekee_tf = cf_tf * rho**(5.D0/3.D0)
+                  do l = 1, nfrag
+                     ekee_tf = ekee_tf - cf_tf * max(rhom(l), 1d-30)**(5.D0/3.D0)
+                  end do
+                  ! Weizsacker correction: G_W = |grad rho|^2 / (8 rho)
+                  gw_total = grad2 / (rho * 8.D0)
+                  gw_frags = 0.D0
+                  do l = 1, nfrag
+                     if (rhom(l) > 1d-30) then
+                        grad2_l = dot_product(gradm(:,l), gradm(:,l))
+                        gw_frags = gw_frags + grad2_l / (rhom(l) * 8.D0)
+                     end if
+                  end do
+                  ekee = ekee_tf - (8.D0/9.D0) * (gw_total - gw_frags)
                   intra = inter .and. (any(rhom(1:nfrag) >= sum(rhom(1:nfrag))*rhoparam))
                   if (intra) dimgrad = -dimgrad !checks for interatomic, intra is true iff inter and condition hold
                   !$omp critical (cubewrite)
@@ -757,11 +787,11 @@ do while (.true.)
                   if (rho .gt. 1d-30) then
                      crho(i, j, k) = sign(rho, heigs(2))*100.D0
                      cgrad(i, j, k) = dimgrad
-                     csteric(i, j, k) =  esteric
+                     ckee(i, j, k) =  ekee
                   else
                      crho(i, j, k) = 100d0
                      cgrad(i, j, k) = 100d0
-                     csteric(i, j, k) = 100d0
+                     ckee(i, j, k) = 100d0
                   end if
 
                   do molid = 1, nfiles
@@ -780,7 +810,7 @@ do while (.true.)
       else  ! wavefunction densities
          if (.not. inter) then
             call system_clock(count=c1)
-            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig, csteric)
+            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig, ckee)
             !$omp parallel do private (x,rho,grad,hess,heigs,hvecs,wk1,wk2,istat,grad2,&
             !$omp dimgrad,intra,rhom,flag,indx,i0,j0,k0) schedule(dynamic)
             do k = 0, nstep(3) - 1
@@ -817,7 +847,7 @@ do while (.true.)
                            crho(i, j, k) = 100d0
                            cgrad(i, j, k) = 100d0
                            cheig(i, j, k) = 0d0
-                           csteric(i, j, k) = 100d0
+                           ckee(i, j, k) = 100d0
                            cycle
                         end if
    21                   continue
@@ -830,10 +860,10 @@ do while (.true.)
          else !very experimental wfn intermolecular
             call system_clock(count=c1)
             do molid = 1, nfiles
-               call calcprops_id_wfn(xinit, xinc, nstep, m, nfiles, molid, crho, cgrad, cheig, csteric)
+               call calcprops_id_wfn(xinit, xinc, nstep, m, nfiles, molid, crho, cgrad, cheig, ckee)
                crho_n(:, :, :, molid) = crho(:, :, :)
             end do
-            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig, csteric)
+            call calcprops_wfn(xinit, xinc, nstep, m, nfiles, crho, cgrad, cheig, ckee)
             do k = 0, nstep(3) - 1
                do j = 0, nstep(2) - 1
                   do i = 0, nstep(1) - 1
@@ -864,7 +894,7 @@ do while (.true.)
                            crho(i, j, k) = 100d0
                            cgrad(i, j, k) = 100d0
                            cheig(i, j, k) = 0d0
-                           csteric(i, j, k) = 100d0
+                           ckee(i, j, k) = 100d0
                            cycle
                         end if
    22                   continue
@@ -942,14 +972,14 @@ do while (.true.)
       allocate(crho_n(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1, 1:nfiles), stat=istat)
       if (istat /= 0) call error('nciplot', 'could not allocate memory for crho_n (cube case)', faterr)
       crho_n = 0d0
-      allocate (csteric(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
-      if (istat /= 0) call error('nciplot', 'could not allocate memory for steric (cube case)', faterr)
+      allocate (ckee(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
+      if (istat /= 0) call error('nciplot', 'could not allocate memory for ckee (cube case)', faterr)
 
       do it1=0,nstep(1)-1 ! first we initialise the reduced gradient array to 100d0
          do it2=0,nstep(2)-1
             do it3=0,nstep(3)-1
                cgrad(it1,it2,it3) = 100d0
-               csteric(it1,it2,it3) = 0d0
+               ckee(it1,it2,it3) = 0d0
             end do
          end do
       end do
@@ -985,7 +1015,8 @@ do while (.true.)
                              -8d0*m(1)%cubedens(it1,  it2,  it3-1) +      m(1)%cubedens(it1,  it2,  it3-2)) / (12d0*m(1)%xinc0(3))
                   grad2 = dot_product(grad, grad)
                   cgrad(it1,it2,it3) = sqrt(grad2)/(const*(m(1)%cubedens(it1,it2,it3)**(4.d0/3.d0)))               ! (2*((3*pi**2)**1/3) * (p(r)**4/3))
-                  csteric(it1,it2,it3) = grad2/(m(1)%cubedens(it1,it2,it3)*8d0)
+                  ! Cube case: no per-fragment decomposition available, store Weizsacker KE as fallback
+                  ckee(it1,it2,it3) = grad2/(m(1)%cubedens(it1,it2,it3)*8d0)
 
                   hess(1,1) = ((m(1)%cubedens(it1+2,it2,it3)) - 2*(m(1)%cubedens(it1+1,it2,it3)) + (m(1)%cubedens(it1,it2,it3)) ) &
                                  /(m(1)%xinc0(1) * m(1)%xinc0(1)) 
@@ -1007,7 +1038,7 @@ do while (.true.)
                crho(it1,it2,it3) = sign(real(m(1)%cubedens(it1,it2,it3)),real(heigs(2)))*100.d0
                else ! Should be 0.0
                   cgrad(it1,it2,it3) = 100d0
-                  csteric(it1,it2,it3)= 0d0
+                  ckee(it1,it2,it3)= 0d0
                   crho(it1,it2,it3) = m(1)%cubedens(it1,it2,it3)*100d0
                end if
             end do
@@ -1242,7 +1273,7 @@ do while (.true.)
       do i= 1, nranges
          tmp_rmbox_range_tmp(:,:,:)= box_in_range(:,:,:,i)
          call dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, cgrad, &
-                  rmbox_coarse,tmp_rmbox_range_tmp, nfiles, csteric)
+                  rmbox_coarse,tmp_rmbox_range_tmp, nfiles, ckee)
          write (uout, 135) srhorange(i,1), srhorange(i,2), sum_rhon_vol, sum_signrhon_vol 
          rho_range(i) = sum_rhon_vol(1)
       enddo
@@ -1252,6 +1283,52 @@ do while (.true.)
       if (isverbose) write (uout, 136) Total_rho, sumrangedensity ,densitydifference
    
    endif ! if range
+
+   !===============================================================================!
+   ! Self-consistent KEE integration: integrate over volume where DeltaC > keecut
+   !===============================================================================!
+   if (keecut > 0d0 .and. dointeg) then
+      ! Build point mask for KEECUT integration and a real-valued KEE field cube.
+      ! rmpoint_kee: .true. means EXCLUDED from KEECUT-dependent integration.
+      ! ckee_region: stores the actual DeltaC values on active NCI points (0 elsewhere),
+      ! so the threshold can be explored interactively in VMD via isovalue changes.
+      allocate(rmpoint_kee(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
+      if (istat /= 0) call error('nciplot', 'could not allocate rmpoint_kee', faterr)
+      allocate(ckee_region(0:nstep(1)-1, 0:nstep(2)-1, 0:nstep(3)-1), stat=istat)
+      if (istat /= 0) call error('nciplot', 'could not allocate ckee_region', faterr)
+      rmpoint_kee = .true.
+      ckee_region = 0d0
+      do k = 0, nstep(3) - 2
+         do j = 0, nstep(2) - 2
+            do l = 0, nstep(1) - 2
+               if (.not. rmbox_coarse(l, j, k)) then
+                  do kk = k, k+1
+                     do jj = j, j+1
+                        do ll = l, l+1
+                           ckee_region(ll, jj, kk) = ckee(ll, jj, kk)
+                           if (ckee(ll, jj, kk) >= keecut) then
+                              rmpoint_kee(ll, jj, kk) = .false.
+                           end if
+                        end do
+                     end do
+                  end do
+               end if
+            end do
+         end do
+      end do
+      call dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, cgrad, &
+               rmbox_coarse, rmpoint_kee, nfiles, ckee)
+      write (uout, 139) keecut, sum_rhon_vol(9), sum_rhon_vol(8), sum_rhon_vol(1)
+
+      ! Write real-valued KEE field on active region (0 outside active region).
+      lukee = 17
+      open (lukee, file=trim(oname)//"-kee-region.cube")
+      call write_cube_header(lukee, 'kee_region_cube', 'Active-region DeltaC field for interactive KEECUT tuning')
+      call write_cube_body(lukee, nstep, ckee_region)
+      deallocate(rmpoint_kee)
+      deallocate(ckee_region)
+   end if
+
    call system_clock(count=c6)
 
    !===============================================================================!
@@ -1306,7 +1383,7 @@ do while (.true.)
    if (allocated(cheig)) deallocate (cheig)
    if (allocated(cgrad)) deallocate (cgrad)
    if (allocated(crho_n)) deallocate (crho_n)
-   if (allocated(csteric)) deallocate (csteric)
+   if (allocated(ckee)) deallocate (ckee)
    if (ludat > 0) close (ludat)
 
    !===============================================================================!
@@ -1437,7 +1514,7 @@ do while (.true.)
    if (allocated(tmp_crho_n)) deallocate (tmp_crho_n)
    if (allocated(tmp_cheigs)) deallocate (tmp_cheigs)
    if (allocated(tmp_cgrad)) deallocate (tmp_cgrad)
-   if (allocated(tmp_csteric)) deallocate (tmp_csteric)
+   if (allocated(tmp_ckee)) deallocate (tmp_ckee)
    if (allocated(fginc)) deallocate (fginc)
 
    call tictac('End')
@@ -1610,7 +1687,7 @@ do while (.true.)
           ' n=4/3           :', 3X, F15.8, /, &
           ' n=5/3           :', 3X, F15.8, /, &
           ' Volume          :', 3X, F15.8, /, &
-          ' Steric_energy   :', 3X, F15.8, /, &
+          ' KEE_inter       :', 3X, F15.8, /, &
           '---------------------------------------------------------------------', /, &
           ' Integration  over the volumes of sign(lambda2)(rho)^n             '/, &
           '---------------------------------------------------------------------', /, &
@@ -1623,6 +1700,14 @@ do while (.true.)
           ' n=5/3           :', 3X, F15.8, /, &
           '---------------------------------------------------------------------')
 
+139 format('----------------------------------------------------------------------', /, &
+          '         SELF-CONSISTENT KEE INTEGRATION                              ', /, &
+          '----------------------------------------------------------------------', /, &
+          ' KEE threshold   :', 3X, F15.8, /, &
+          ' KEE_inter       :', 3X, F15.8, /, &
+          ' Volume          :', 3X, F15.8, /, &
+          ' rho integral    :', 3X, F15.8, /, &
+          '----------------------------------------------------------------------')
 
 136 format(' Additivity Check', /, & 
           '----------------------------------------------------------------------', /, &
@@ -2088,14 +2173,14 @@ contains
    end subroutine dataGeom 
 
    subroutine dataGeom_points(sum_rhon_vol, sum_signrhon_vol, xinc, nstep, crho, crho_n, cgrad, rmbox_coarse, &
-                              rmpoint_coarse, nfiles, csteric)
+                              rmpoint_coarse, nfiles, ckee)
       real*8, intent(out) :: sum_rhon_vol(9)
       real*8, intent(out) :: sum_signrhon_vol(7)
       real*8, intent(in) :: xinc(3)
       integer, intent(in) :: nstep(3)
       real*8, intent(in) :: crho(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
                             cgrad(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
-                            csteric(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
+                            ckee(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1), &
                             crho_n(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1, 1:nfiles)
       logical, intent(in) :: rmbox_coarse(0:nstep(1) - 2, 0:nstep(2) - 2, 0:nstep(3) - 2)
       logical, intent(in) :: rmpoint_coarse(0:nstep(1) - 1, 0:nstep(2) - 1, 0:nstep(3) - 1)
@@ -2133,8 +2218,8 @@ contains
                                     *xinc(1)*xinc(2)*xinc(3)/8
                             ! n = 0: volume of cubes
                             sum_rhon_vol(8) = sum_rhon_vol(8) + xinc(1)*xinc(2)*xinc(3)/8
-                            ! steric energy
-                            sum_rhon_vol(9) = sum_rhon_vol(9) + csteric(i1, j1, k1)*xinc(1)*xinc(2)*xinc(3)/8
+                            ! interfragment Pauli KEE (DeltaC)
+                            sum_rhon_vol(9) = sum_rhon_vol(9) + ckee(i1, j1, k1)*xinc(1)*xinc(2)*xinc(3)/8
                             !sign_lambda2 x rho
                             signrho = crho(i, j, k)
                             signlambda_2 = sign(1d0, signrho)

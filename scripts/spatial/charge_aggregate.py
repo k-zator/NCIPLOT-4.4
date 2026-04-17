@@ -278,7 +278,7 @@ def read_wfn_geometry(wfn_path):
                     z = float(p[6]) * bohr_to_angstrom
                 except ValueError:
                     continue
-                elements.append(p[1])
+                elements.append(p[0])
                 coords.append([x, y, z])
     return elements, np.asarray(coords, dtype=float)
 
