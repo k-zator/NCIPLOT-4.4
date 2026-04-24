@@ -1,3 +1,6 @@
 *.mod
 *.o
-scripts/spatial/__pycache__/*
+*/*/__pycache__/*
+*/*__pycahe__*
+*__pycache__*
+
