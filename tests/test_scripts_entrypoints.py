@@ -232,7 +232,14 @@ def test_ncicluster_main_runs_with_mocked_dependencies(monkeypatch, tmp_path):
     monkeypatch.setattr(NCICLUSTER, "write_CPs_xyz", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(NCICLUSTER, "write_cube_select", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(NCICLUSTER, "write_vmd", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(NCICLUSTER, "integrate_NCI_cluster", lambda *_args, **_kwargs: np.ones((1, 8)))
+    monkeypatch.setattr(
+        NCICLUSTER,
+        "integrate_NCI_clusters",
+        lambda *_args, **_kwargs: (
+            np.unique(_args[4]),
+            np.ones((len(np.unique(_args[4])), 1, 8)),
+        ),
+    )
 
     rc = NCICLUSTER.main([str(input_names)])
     assert rc == 0

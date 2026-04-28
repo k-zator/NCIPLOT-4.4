@@ -92,9 +92,9 @@ def find_CP_with_gradient(matrix, threshold = 0.05, radius = 0.15, ispromol=True
 
     # second filter: they cannot have no points associatesd with them in the original grid (i.e. they cannot be isolated points in the gradient field)
     final_CPs = []
+    strict_filter_radius = np.nextafter(0.5, 0.0)
     for cp in critical_points:
-        dist = np.linalg.norm(coordinates - cp[0], axis=1)
-        if np.any(dist < 0.5):  # Check if there are points within 0.5 Å of the CP
+        if tree.query_ball_point(cp[0], r=strict_filter_radius):
             final_CPs.append(cp)
     print(" Number of critical points after filtering: ", len(final_CPs))
     print(" Number of critical points found: ", len(critical_points))

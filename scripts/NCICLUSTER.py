@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from spatial.UTILS import process_cube, write_cube_select, write_vmd
 from spatial.DIVIDE import find_CP_with_gradient, write_CPs_xyz
-from spatial.INTEGRATE import integrate_NCI_cluster, integrate_NCI_cluster_wfn
+from spatial.INTEGRATE import integrate_NCI_clusters, integrate_NCI_clusters_wfn
 from spatial.OPT_DICT import options_dict
 
 """
@@ -71,34 +71,33 @@ def main(argv=None):
     print("----------------------------------------------------------------------")
     print("      RANGE CLUSTERED INTEGRATION DATA over the volumes of rho^n      ")
 
-    integrals = []
-    for i in np.unique(labels):
-        cluster_grad = np.reshape(Mrhos[:, 4], grid)
-        if opt_dict["ispromol"]:
-            integrals.append(
-                integrate_NCI_cluster(
-                    cluster_grad,
-                    densarray,
-                    grid,
-                    dvol,
-                    labels,
-                    i,
-                    rhoparam=s,
-                    rhorange=opt_dict["range"],
-                    promol=opt_dict["ispromol"],
-                ))
-        else:
-            integrals.append(
-                integrate_NCI_cluster_wfn(
-                    cluster_grad,
-                    densarray,
-                    grid,
-                    dvol,
-                    labels,
-                    i,
-                    rhoparam=s,
-                    rhorange=opt_dict["range"],
-                ))
+    cluster_ids = np.unique(labels)
+    cluster_grad = np.reshape(Mrhos[:, 4], grid)
+    if opt_dict["ispromol"]:
+        _, integrals = integrate_NCI_clusters(
+            cluster_grad,
+            densarray,
+            grid,
+            dvol,
+            labels,
+            rhoparam=s,
+            rhorange=opt_dict["range"],
+            promol=opt_dict["ispromol"],
+            cluster_ids=cluster_ids,
+        )
+    else:
+        _, integrals = integrate_NCI_clusters_wfn(
+            cluster_grad,
+            densarray,
+            grid,
+            dvol,
+            labels,
+            rhoparam=s,
+            rhorange=opt_dict["range"],
+            cluster_ids=cluster_ids,
+        )
+
+    for i, cluster_integral in zip(cluster_ids, integrals):
         
         #write_cube_select(filename, i, Mrhos, labels, header, grid)
         print("----------------------------------------------------------------------")
@@ -107,17 +106,17 @@ def main(argv=None):
             print("----------------------------------------------------------------------")
             print(" Interval        :       {:.8f}       {:.8f}  ".format(opt_dict["range"][r][0], opt_dict["range"][r][1]))
             print("----------------------------------------------------------------------")
-            print(" n=1.0           :        {:.8f}".format(integrals[-1][r][0]))
-            print(" n=1.5           :        {:.8f}".format(integrals[-1][r][1]))
-            print(" n=2.0           :        {:.8f}".format(integrals[-1][r][2]))
-            print(" n=2.5           :        {:.8f}".format(integrals[-1][r][3]))
-            print(" n=3.0           :        {:.8f}".format(integrals[-1][r][4]))
-            print(" n=4/3           :        {:.8f}".format(integrals[-1][r][5]))
-            print(" n=5/3           :        {:.8f}".format(integrals[-1][r][6]))
-            print(" Volume          :        {:.8f}".format(integrals[-1][r][7]))
+            print(" n=1.0           :        {:.8f}".format(cluster_integral[r][0]))
+            print(" n=1.5           :        {:.8f}".format(cluster_integral[r][1]))
+            print(" n=2.0           :        {:.8f}".format(cluster_integral[r][2]))
+            print(" n=2.5           :        {:.8f}".format(cluster_integral[r][3]))
+            print(" n=3.0           :        {:.8f}".format(cluster_integral[r][4]))
+            print(" n=4/3           :        {:.8f}".format(cluster_integral[r][5]))
+            print(" n=5/3           :        {:.8f}".format(cluster_integral[r][6]))
+            print(" Volume          :        {:.8f}".format(cluster_integral[r][7]))
 
     if len(integrals) > 0:
-        total_integrals = np.sum(np.array(integrals), axis=0)
+        total_integrals = integrals.sum(axis=0)
         print("----------------------------------------------------------------------")
         print(" Summed-across-clusters integrals by range")
         for r in range(len(opt_dict["range"])):
@@ -134,7 +133,7 @@ def main(argv=None):
             print(" Volume          :        {:.8f}".format(total_integrals[r][7]))
     print("----------------------------------------------------------------------")
 
-    write_vmd(filename, labels, opt_dict["isovalue"], verbose=opt_dict["verbose"])
+    #write_vmd(filename, labels, opt_dict["isovalue"], verbose=opt_dict["verbose"])
     return 0
 
 

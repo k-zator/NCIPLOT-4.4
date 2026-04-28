@@ -52,116 +52,94 @@ def read_cube(filename, verbose=False):
     """
     if verbose:
         print("  Reading cube file: {}".format(filename))
-    with open(filename, "r") as f:
-        for i, line in enumerate(f):
-            if i == 2:
-                gridinfo1 = line
-                n_at = int(gridinfo1.split()[0])
-                o1, o2, o3 = (
-                    float(gridinfo1.split()[1]),
-                    float(gridinfo1.split()[2]),
-                    float(gridinfo1.split()[3]),
-                )
-            elif i == 3:
-                gridinfo2 = line
-                npx = int(gridinfo2.split()[0])
-                incrx = float(gridinfo2.split()[1])
-            elif i == 4:
-                gridinfo3 = line
-                npy = int(gridinfo3.split()[0])
-                incry = float(gridinfo3.split()[2])
-            elif i == 5:
-                gridinfo4 = line
-                npz = int(gridinfo4.split()[0])
-                incrz = float(gridinfo4.split()[3])
-            elif i > 5:
-                break
+    with open(filename, "r") as handle:
+        lines = handle.readlines()
 
-    pts = np.zeros((npx, npy, npz, 3))
-    idx = np.indices((npx, npy, npz))
-    pts[:, :, :, 0] = o1 + idx[0] * incrx
-    pts[:, :, :, 1] = o2 + idx[1] * incry
-    pts[:, :, :, 2] = o3 + idx[2] * incrz
-    coordinates = []
-    with open(filename, "r") as f:
-        for i, line in enumerate(f):
-            if i in range(6, 6 + n_at):
-                coord = line
-                coordinates.append(
-                    coord.split()[0]
-                    + ","
-                    + coord.split()[2]
-                    + ","
-                    + coord.split()[3]
-                    + ","
-                    + coord.split()[4]
-                )
-            elif i > (6 + n_at):
-                break
-    if len(coordinates) == n_at:
-        pass
-    else:
+    if len(lines) < 6:
+        raise ValueError("Cube file is missing header lines")
+
+    origin_info = lines[2].split()
+    n_at = int(origin_info[0])
+    o1, o2, o3 = (float(origin_info[1]), float(origin_info[2]), float(origin_info[3]))
+
+    x_info = lines[3].split()
+    y_info = lines[4].split()
+    z_info = lines[5].split()
+    npx = int(x_info[0])
+    npy = int(y_info[0])
+    npz = int(z_info[0])
+    incrx = float(x_info[1])
+    incry = float(y_info[2])
+    incrz = float(z_info[3])
+
+    atom_lines = lines[6 : 6 + n_at]
+    if len(atom_lines) != n_at:
         raise ValueError("There is a problem with the coordinates of the cube file!")
 
-    lines = open(filename).readlines()
-    cubeval = []
-    for i in lines[n_at + 6 :]:
-        for j in i.split():
-            cubeval.append(j)
-    cube_shaped = np.reshape(cubeval, (npx, npy, npz))
-    carray = cube_shaped.astype(np.float64)
-    header = []
-    with open(filename, "r") as g:
-        for i, line in enumerate(g):
-            if i in range(0, 6 + n_at):
-                header.append(line)
+    header = lines[: 6 + n_at]
+    values = np.fromstring("".join(lines[6 + n_at :]), sep=" ", dtype=np.float64)
+    expected_values = npx * npy * npz
+    if values.size != expected_values:
+        raise ValueError("Cube file does not contain the expected number of values")
+    carray = values.reshape((npx, npy, npz))
 
-    atcoords = np.array([[int(coord.split(",")[0]), float(coord.split(",")[1]), float(coord.split(",")[2]), float(coord.split(",")[3])] for coord in coordinates])
+    pts = np.empty((npx, npy, npz, 3), dtype=np.float64)
+    pts[:, :, :, 0] = o1 + np.arange(npx, dtype=np.float64)[:, None, None] * incrx
+    pts[:, :, :, 1] = o2 + np.arange(npy, dtype=np.float64)[None, :, None] * incry
+    pts[:, :, :, 2] = o3 + np.arange(npz, dtype=np.float64)[None, None, :] * incrz
+
+    atcoords = np.array(
+        [
+            [int(parts[0]), float(parts[2]), float(parts[3]), float(parts[4])]
+            for parts in (line.split() for line in atom_lines)
+        ]
+    )
 
     return header, pts, carray, atcoords
 
+
+def _write_cube_values(handle, flat_values, fmt):
+    flat_values = np.asarray(flat_values, dtype=np.float64).reshape(-1)
+    full_row_count, remainder = divmod(flat_values.size, 6)
+
+    if full_row_count:
+        np.savetxt(
+            handle,
+            flat_values[: full_row_count * 6].reshape(full_row_count, 6),
+            fmt=fmt,
+            delimiter="",
+        )
+
+    if remainder:
+        handle.write("".join(fmt % value for value in flat_values[full_row_count * 6 :]) + "\n")
+
+
+def _write_cube_file(output_file, header_str, flat_values, fmt):
+    with open(output_file, "w") as handle:
+        handle.write(header_str)
+        _write_cube_values(handle, flat_values, fmt)
+
 def write_cube(filename, cl, X, labels, header, grid, verbose=False, parallel=False):
     """Write cube files with highly optimized performance."""
-    import numpy as np
-    from multiprocessing import Pool
-    import os
-    # Pre-calculate array dimensions 
-    header_str = ''.join(header)
-    
-    # Vectorized data preparation
+    header_str = "".join(header)
+
     mask = (labels == cl)[:, np.newaxis]
     values = np.where(mask, X[:, [4, 3]], 100)
 
-    def write_file(suffix, data):
-        """Write a single cube file"""
-        output_file = f"{filename}-cl{cl+1}-{suffix}.cube"
-        
-        # Reshape the flattened data back to 3D grid
-        data_3d = data.reshape(grid)
-        
-        with open(output_file, 'w') as f:
-            # Write header
-            f.write(header_str)
-            
-            # Write data respecting grid dimensions
-            values_per_line = 6
-            for x in range(grid[0]):
-                for y in range(grid[1]):
-                    row = data_3d[x, y, :]  # Get full z-row
-                    # Write row in chunks of 6
-                    for i in range(0, len(row), values_per_line):
-                        chunk = row[i:i + values_per_line]
-                        line = "".join(f"{val:13.5E}" for val in chunk)
-                        f.write(line + "\n")
+    file_specs = [
+        (f"{filename}-cl{cl+1}-grad.cube", values[:, 0], "%13.5E"),
+        (f"{filename}-cl{cl+1}-dens.cube", values[:, 1] / 100.0, "%13.5E"),
+    ]
 
-    if parallel and len(values) > 1000000:  # Only use multiprocessing for large datasets
+    if parallel and len(values) > 1000000:
         with Pool() as pool:
-            pool.starmap(write_file, 
-                        [('grad', values[:, 0].flatten()), 
-                         ('dens', values[:, 1].flatten())])
+            pool.starmap(
+                _write_cube_file,
+                [(output_file, header_str, flat_values, fmt) for output_file, flat_values, fmt in file_specs],
+            )
     else:
-        write_file('grad', values[:, 0].flatten())
-        write_file('dens', values[:, 1].flatten()/100) # Convert back to original units
+        for output_file, flat_values, fmt in file_specs:
+            _write_cube_file(output_file, header_str, flat_values, fmt)
 
     if verbose:
         print(f"  Wrote cube files {filename}-cl{cl+1}-[grad/dens].cube")
@@ -202,27 +180,16 @@ def write_cube_select(filename, cl, X, labels, header, grid, verbose=False):
     new_header += f"   {nz}    0.000000    0.000000  {spacing:10.6f}\n"
     new_header += f"   0   0.0 {mins[0]:10.6f} {mins[1]:10.6f} {mins[2]:10.6f}\n"
 
-    # Fill the new grid with 100s
-    selected_dens = np.full((nx, ny, nz), 100.0)
-    selected_grad = np.full((nx, ny, nz), 100.0)
+    local_mask = mask[x_min : x_max + 1, y_min : y_max + 1, z_min : z_max + 1]
+    dens_block = dens[x_min : x_max + 1, y_min : y_max + 1, z_min : z_max + 1]
+    grad_block = grad[x_min : x_max + 1, y_min : y_max + 1, z_min : z_max + 1]
 
-    # Place the selected values in the correct positions
-    for xi, yi, zi in zip(x_indices, y_indices, z_indices):
-        selected_dens[xi - x_min, yi - y_min, zi - z_min] = dens[xi, yi, zi]
-        selected_grad[xi - x_min, yi - y_min, zi - z_min] = grad[xi, yi, zi]
+    selected_dens = np.where(local_mask, dens_block, 100.0)
+    selected_grad = np.where(local_mask, grad_block, 100.0)
 
-    def write_file(suffix, values):
-        output_file = f"{filename}-cl{cl+1}-{suffix}.cube"
-        with open(output_file, 'w') as f:
-            f.writelines(new_header)
-            # Write in cube format: 6 values per line
-            flat = values.flatten()
-            for i in range(0, len(flat), 6):
-                line = "".join(f"{val:12.6f}" for val in flat[i:i+6])
-                f.write(line + "\n")
-
-    write_file("dens", selected_dens)
-    write_file("grad", selected_grad)
+    header_str = new_header
+    _write_cube_file(f"{filename}-cl{cl+1}-dens.cube", header_str, selected_dens / 100.0, "%13.5E")
+    _write_cube_file(f"{filename}-cl{cl+1}-grad.cube", header_str, selected_grad, "%13.5E")
     if verbose:
         print(f"  Wrote cube files {filename}-cl{cl+1}-[grad/dens].cube")
 
