@@ -166,12 +166,23 @@ def _empty_active_box(shape):
     return np.zeros(tuple(max(dim - 1, 0) for dim in shape), dtype=bool)
 
 
-def _build_promol_active_box(gradarray, rhoparam):
-    if min(gradarray.shape) < 2:
-        return _empty_active_box(gradarray.shape)
+def _any_vertex_in_2x2x2(mask):
+    if min(mask.shape) < 2:
+        return _empty_active_box(mask.shape)
 
-    grad_blocks = np.lib.stride_tricks.sliding_window_view(gradarray, (2, 2, 2))
-    return np.any(grad_blocks < rhoparam, axis=(-3, -2, -1))
+    active_shape = tuple(dim - 1 for dim in mask.shape)
+    result = np.zeros(active_shape, dtype=bool)
+    for dx, dy, dz in VERTEX_OFFSETS:
+        result |= mask[
+            dx : dx + active_shape[0],
+            dy : dy + active_shape[1],
+            dz : dz + active_shape[2],
+        ]
+    return result
+
+
+def _build_promol_active_box(gradarray, rhoparam):
+    return _any_vertex_in_2x2x2(gradarray < rhoparam)
 
 
 def _build_wfn_active_box(gradarray, densarray, rhoparam, rhocut):
@@ -179,9 +190,7 @@ def _build_wfn_active_box(gradarray, densarray, rhoparam, rhocut):
         return _empty_active_box(gradarray.shape)
 
     active_box = gradarray[:-1, :-1, :-1] < rhoparam
-    rho_blocks = np.lib.stride_tricks.sliding_window_view(densarray / 100.0, (2, 2, 2))
-    grad_blocks = np.lib.stride_tricks.sliding_window_view(gradarray, (2, 2, 2))
-    refined_out = np.any((np.abs(rho_blocks) > rhocut) & (grad_blocks > 0.0), axis=(-3, -2, -1))
+    refined_out = _any_vertex_in_2x2x2((np.abs(densarray / 100.0) > rhocut) & (gradarray > 0.0))
     return active_box & ~refined_out
 
 
